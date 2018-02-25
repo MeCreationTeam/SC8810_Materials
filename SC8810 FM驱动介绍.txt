@@ -1,0 +1,254 @@
+SC8810
+
+www.spreadtrum.com
+
+SC8810 FM驱动介绍
+
+上海·北京· 深圳· 圣迭戈· 韩国· 印度 人力资源部－培训发展组
+
+.1
+
+Innovation changes the future
+
+课程名称： SC8810 FM 驱动介绍 课程类别： 客户培训课程
+课程目标： 1. FM 硬件模块 2. 代码结构 3. 模块流程 4. 客户化配置
+
+对象：客户 讲师：驱动软件工程师
+
+课时数：2H 教学法：面授
+
+www.spreadtrum.com
+
+2
+
+主要内容
+
+Innovation changes the future
+
+SC8810 FM 硬件接口介绍
+
+SC8810 FM 驱动代码结构
+
+SC8810 FM 上层代码结构
+
+SC8810 FM 模块整体工作流程
+
+SC8810 FM 模块客户化配置
+
+www.spreadtrum.com
+
+3
+
+SC8810 FM 硬件接口介绍
+FM芯片的接口引脚，主要有以下3组： ? 控制接口
+
+Innovation changes the future
+
+使用I2C总线控制，通过读写FM的寄存器，实现搜台，频率设置，音 量设置等
+
+? 数据接口
+FM直接输出左右声道的模拟信号到SC8810的AIR1/AIL1模拟输入端
+
+? 电源、时钟、天线
+SC8810输出一路2.8v的VDDSIM2给FM芯片供电 SC8810输出一路32k RTC_CLK提供给FM芯片作为基准时钟 FM的天线引脚接到耳机口
+
+www.spreadtrum.com
+
+4
+
+SC8810 FM 硬件接口介绍
+
+Innovation changes the future
+
+headset
+
+ANT VDD RCLK SCLK SDIO
+
+VDDSIM2 RTC_CLK SCL SDA
+
+FM KT0812G
+
+ROUT LOUT
+
+AIR1 AIL1 SC8810
+
+www.spreadtrum.com
+
+5
+
+主要内容
+
+Innovation changes the future
+
+SC8810 FM 硬件接口介绍
+
+SC8810 FM 驱动代码结构
+
+SC8810 FM 上层代码结构
+
+SC8810 FM 模块整体工作流程
+
+SC8810 FM 模块客户化配置
+
+www.spreadtrum.com
+
+6
+
+SC8810 FM 驱动代码结构
+代码路径： 3rdparty/fm/kt0812G/special/driver/kt0812g_fm_ctrl.c 1. 把FM注册成i2c设备，从而可以通过i2c接口控制设备 i2c_static_add_device(&kt0812g_i2c_boardinfo); i2c_add_driver(&kt0812g_i2c_driver); 2.
+
+Innovation changes the future
+
+3. 4.
+
+5.
+
+6.
+
+使用i2c传输函数，实现一组FM控制函数 kt0812g_fm_set_tune() kt0812g_fm_get_frequency() kt0812g_fm_do_seek() ? 把FM注册成misc设备，通过ioctl把上面的控制函数从/dev/KT0812G_FM设备节点导出给应用层 misc_register(&kt0812g_fm_misc_device); 时钟输出 32K时钟从SC8810的引脚SIMRST2输出，这是一个功能复用引脚，默认是SIMRST2功能，需要设定为CLK_RTC功能，这个已 经在customize/customer_cfg/sp8810ga/kernel/pinmap/pinmap_cfg.c中配置好了， MFP_CFG_X(SIMRST2, AF1, DS1, F_PULL_NONE, S_PULL_NONE, IO_Z), // NC CLK_RTC在SC8810芯片复位时就会默认输出32.768kHz的信号，所以无需在代码中配置。 电源控制 LDO_SetVoltLevel(LDO_LDO_SIM2, LDO_VOLT_LEVEL0); LDO_TurnOnLDO(LDO_LDO_SIM2); 电源管理 在early suspend时保存当前音量，频率等信息，然后关闭FM的电源：kt0812g_chip_vdd_input(false) 在later resume时打开FM的电源：kt0812g_chip_vdd_input(true)，并恢复音量，频率。
+
+www.spreadtrum.com
+
+7
+
+主要内容
+
+Innovation changes the future
+
+SC8810 FM 硬件接口介绍
+
+SC8810 FM 驱动层代码结构
+
+SC8810 FM 应用层代码结构
+
+SC8810 FM 模块整体工作流程
+
+SC8810 FM 模块客户化配置
+
+www.spreadtrum.com
+
+8
+
+SC8810 FM 应用层代码结构
+
+Innovation changes the future
+
+FM模块没有实现HAL层，jni接口层直接打开/dev/KT0812G_FM后通过ioctl操作设备，并封装接口给framework，framework进 而提供FM api给应用程序。 代码路径： Native: frameworks/base/core/jni/android_hardware_fm.cpp JNI: frameworks/base/core/java/android/hardware/fmradio/FmReceiverJNI.java Framework: frameworks/base/core/java/android/hardware/fmradio/* APP: packages/apps/Prebuilt_apps/FMPlayer.apk (无源码) Native负责打开设备，并用ioctl调用fm驱动的控制函数，封装成JNI接口，提供给framework层： android_hardware_fmradio_FmReceiverJNI_acquireFdNative(); //打开设备 android_hardware_fmradio_FmReceiverJNI_setControlNative(); //设置音量 android_hardware_fmradio_FmReceiverJNI_setFreqNative(); //调频 android_hardware_fmradio_FmReceiverJNI_startSearchNative(); //搜台 ?? Framework封装JNI接口，提供android API给FM APP： public class FmReceiver extends FmTransceiver { public boolean enable (FmConfig configSettings); public boolean setVolume (int value); public boolean searchStations (int freq, int direction, int timeout); ?? }
+
+2013-1-31
+
+www.spreadtrum.com
+
+.9
+
+9
+
+主要内容
+
+Innovation changes the future
+
+SC8810 FM 硬件接口介绍
+
+SC8810 FM 驱动代码结构
+
+SC8810 FM 上层代码结构
+
+SC8810 FM 模块整体工作流程
+
+SC8810 FM 模块客户化配置
+
+www.spreadtrum.com
+
+10
+
+SC8810 FM 模块整体工作流程
+以open fm为例，流程如下图所示，其他如tune，search，close等操作都类似。
+
+Innovation changes the future
+
+RadioService (no source code)
+
+FmTransceiver.java
+
+FmRxControls.java
+
+android_hardware_fm.cpp
+
+kt0812g_fm_ctrl.c
+
+acquire() acquireFdNative()
+open ("/dev/KT0812G_FM")
+
+fmOn() setControlNative()
+V4L2_CID_PRIVATE_TAVARUA_STATE
+
+Ioctl: FM_IOCTL_ENABLE
+
+setVolume() setControlNative()
+V4L2_CID_AUDIO_VOLUME
+
+Ioctl: FM_IOCTL_SET_VOLUME
+
+setStation() setFreqNative()
+Ioctl: FM_IOCTL_SET_TUNE
+■ APP ■ Framework ■ JNI ■ Driver
+
+www.spreadtrum.com
+
+11
+
+主要内容
+
+Innovation changes the future
+
+SC8810 FM 硬件接口介绍
+
+SC8810 FM 驱动代码结构
+
+SC8810 FM 上层代码结构
+
+SC8810 FM 模块整体工作流程
+
+SC8810 FM 模块客户化配置
+
+www.spreadtrum.com
+
+12
+
+SC8810 FM 模块客户化配置
+
+Innovation changes the future
+
+如果客户更换了FM芯片，需要新增一个FM驱动，可以直接在现有FM代码基础上移植： ? 在3rdparty/fm/目录下，复制目录kt0812G到当前目录，并用新的FM芯片型号重命名之，例如BK1080 ? customize/make/sp8810ga.mak中的3RDPARTY_FM = kt0812G 改为 3RDPARTY_FM = BK1080 ? 3rdparty/fm/kt0812G/special/build.sh中 ko/kt0812g_fm_ctrl.ko:/system/lib/modules 改为 ko/bk1080_fm_ctrl.ko:/system/lib/modules ? 3rdparty/fm/kt0812G/special/init.3rdparty.rc中 insmod /system/lib/modules/kt0812g_fm_ctrl.ko 改为 insmod /system/lib/modules/bk1080_fm_ctrl.ko device /dev/KT0812G_FM 666 system audio 改为 device /dev/BK1080_FM 666 system audio ? 移植新的FM驱动：
+– 把3rdparty/fm/special/driver下的kt0812g_fm_ctrl.c和kt0812g_fm_ctrl.h重命名为bk1080_fm_ctrl.c, bk1080_fm_ctrl.h – 把3rdparty/fm/special/driver/Makefile中obj-m:=kt0812g_fm_ctrl.o 改为obj-m:=bk1080_fm_ctrl.o – 把新的FM驱动移植进bk1080_fm_ctrl.c 和 bk1080_fm_ctrl.h中，需要注意几点： ? I2C总线号和设备地址： #define BK1080_I2C_ADDR 0x37 // 7位地址，不含读写位 #define I2C_STATIC_BUS_NUM (2) // 根据客户板子的设计改成相应的总线号 ? I2C传输函数需要根据FM芯片是8bit或16bit地址和数据宽度进行定制，参考芯片kt0812g是8bit addr/16bit data ， 配置为8bit addr/8bit data的一个例子见后面“I2C 配置”。 ? 最好不要增删ioctl的命令和framework的接口，否则可能造成APP不兼容，因为APP没有开源，不方便修改。
+
+?
+
+编译和调试 添加新驱动后，第一次需要全编一次: ./mk sp8810ga new ，这样会在system/lib/modules目录创建一个链接文件 bk1080_fm_ctrl.ko链接文件，并指向system/sps/BK1080/bk1080_fm_ctrl.ko，烧录boot.img, system.img 之后每次调试只要编译ko文件： ./mk sp8810ga u ko 3rdparty/fm/BK1080/ #编译ko 然后用adb工具把ko push到手机中，并重新启动手机调试： adb push out/target/product/hsdroid/system/sps/BK1080/bk1080_fm_ctrl.ko /system/sps/BK1080/ adb reboot
+
+www.spreadtrum.com
+
+13
+
+I2C 配置
+如果fm的寄存器为8bit地址，8bit数据，则在原先kt0812g 的i2c读写函数基础上，做如下红色位置的修改： static int kt0812g_register_read(struct kt0812g_drv_data *cxt, u8 reg_address, u8 *value) { int ret = -EINVAL; u8 buf[8] = {0}; buf[0] = reg_address; ret = kt0812g_i2c_read(cxt, buf, 1); if (ret >= 0) { *value = buf[0]; //MSB first } return ret; }
+
+Innovation changes the future
+
+static int kt0812g_register_write(struct kt0812g_drv_data *cxt, u8 reg_address, u8 value) { int ret = -EINVAL; u8 buf[8] = {0};
+buf[0] = reg_address; buf[1] = value; // MSB first ret = kt0812g_i2c_write(cxt, buf, 2); return ret; }
+
+www.spreadtrum.com
+
+14
+
+www.spreadtrum.com
+Innovation changes the future
+
+谢谢
+
+上海· 北京· 深圳· 圣迭戈· 韩国·印度
+
+www.spreadtrum.com
+
+15

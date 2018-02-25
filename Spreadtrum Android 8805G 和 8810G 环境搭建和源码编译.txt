@@ -1,0 +1,122 @@
+Spreadtrum Android 8805和8810环境搭建和源码编译V1.0.1
+
+Spreadtrum Android 8805G 和 8810G 环 境搭建和源码编译
+
+Version: 1.0.1 DocCode: Date: 2012-01-11
+
+www.spreadtrum.com
+
+重要声明
+版权声明
+本文档中的任何内容受 《中华人民共和国著作权法》 的保护， 版权所有 ? 2010, 展 讯通信有限公司，保留所有权利，但注明引用其他方的内容除外。
+
+商标声明
+展讯通信有限公司和展讯通信有限公司的产品是展讯通信有限公司专有。在提及 其他公司及其产品时将使用各自公司所拥有的商标， 这种使用的目的仅限于引用。
+
+不作保证声明
+展讯通信有限公司不对此文档中的任何内容作任何明示或暗示的陈述或保证，而 且不对特定目的的适销性及适用性或者任何间接、特殊或连带的损失承担任何责 任。
+
+保密声明
+本文档（包括任何附件）包含的信息是保密信息。接收人了解其获得的本文档是 保密的，除用于规定的目的外不得用于任何目的，也不得将本文档泄露给任何第 三方。
+
+前
+文档说明
+
+言
+
+本文档针对展讯 SC8805G/SC8810G Android 的环境搭建和源码编译过程。
+
+阅读对象
+本文档提供给展讯基带芯片 SC8805G/SC8810G 进行相关设计的客户及内部相 关工程师。
+
+内容介绍
+本文档包括若干章节 ?
+
+文档约定
+本文档采用下面醒目标志来表示在操作过程中应该特别注意的地方。
+
+注意： 提醒操作中应注意的事项。
+
+说明： 说明比较重要的事项。
+
+本文档中描述为【推荐使用】字样，表示其和展讯 SC8805G/SC8810G 平台参考 设计一致。建议客户设计最好参照【推荐使用】 ，这样底层驱动改动最小，有利于 产品软件开发。
+
+相关文档
+无
+
+附录A 修改记录
+Version 1.0.0 1.0.1 Date 2011-08-19 2012-01-11 XQ XQ Owner Created Add 8810 related Notes
+
+目
+
+录
+
+附录 A 修改记录 ........................................................................................................................................... ii 第 1 章 Spreadtrum Android 的环境搭建............................................................................................... 1-1 1.1 安装 Ununtu ................................................................................................................................. 1.1-1 1.2 更新 Ubuntu 系统软件................................................................................................................. 1.2-1 1.3 安装合适的 gcc 和 make 版本 .................................................................................................... 1.3-1 1.4 安装 Sun-java6-jdk ....................................................................................................................... 1.4-1 1.5 安装更新 Andriod 所需环境软件 ............................................................................................... 1.5-2 第 2 章 Spreadtrum Android 的源码编译............................................................................................... 2-3 2.1 解压缩源码包至某工作目录....................................................................................................... 2.1-3 2.2 编译所有代码 .............................................................................................................................. 2.2-3 2.3 单独编译 uboot ,spl 和 fdl2 ......................................................................................................... 2.3-3 2.4 单独编译 kernel ........................................................................................................................... 2.4-4 2.5 仅编译原生 Android .................................................................................................................... 2.5-5
+
+i
+
+第1章 Spreadtrum Android 的环境搭建
+可参考 Google 的 Android 环境搭建网页：http://source.android.com/source/initializing.html.
+
+1.1 安装 Ununtu
+
+编译的操作系统要求是 Ubuntu，编译环境可以是个人电脑，也可以是服务器。 对于个人电脑，可以单独装 Ubuntu（包括和 Windows 双系统共存） ，也可以在 Windows 上安装 Ubuntu 虚拟机 VM。本步骤使用 Ubuntu10.10 VM on Windows XP SP3。验证 Ubuntu10.10 以及 Ubuntu11.04 可以编译。如果是 Ubuntu11.10 的话，由于其附带的 gcc 为 4.6 版本，需要降级处理或者安装合适的 gcc。
+1.2 更新 Ubuntu 系统软件
+
+1. 2.
+
+将 ububtu 所有系统软件更新包下载下来：sudo apt-get update 安装更新包：sudo apt-get upgrade
+
+1.3 安装合适的 gcc 和 make 版本
+
+要能正确编译源代码，需要配备合适版本的 gcc，make，java。8805 和 8810 的编译环境 一样，要求 java6，gcc4.5/4.4，make3.8.1。随 Ubuntu 版本的不同，其附带的 gcc 版本也 会不一致。高版本的 gcc 对代码要求较高，编译时可能会出问题。目前代码在 4.4，4.5 下的 gcc 可以编译，但是在 gcc4.6 下编译不成功，需要安装低版本的 gcc。用 gcc –v 可 以看到 gcc 的版本信息。 正常的 make 版本是 3.8.1， 用 make –v 可以看到其版本信息。
+1.4 安装 Sun-java6-jdk
+
+1.
+
+查看 Java 版本：
+
+java -version 如果结果显示是“java version "1.6.xx.xx"” ，则跳过以下第 2 步。 2. 用下面的命令将 java6 的下载地址加入到 sources.list 并下载安装 java6。
+
+.............................
+
+sudo add-apt-repository "deb http://archive.canonical.com/ lucid partner" sudo add-apt-repository "deb-src http://archive.canonical.com/ lucid
+
+partner" sudo add-apt-repository "deb http://archive.canonical.com/ubuntu lucid partner" sudo add-apt-repository "deb-src http://archive.canonical.com/ubuntu lucid partner" sudo apt-get update sudo apt-get install sun-java6-jdk 3. 在~/.bashrc 文件最后添加下面三行修改环境变量： export JAVA_HOME=/usr/lib/jvm/java-6-sun export PATH=$JAVA_HOME/bin:$PATH export CLASSPATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+
+1.5 安装更新 Andriod 所需环境软件
+
+若某个软件已经安装于实际系统，再次执行安装命令会自动跳过，如果 忘记安装某些软件，则在后续编译过程中会提示没有安装，需要安装。 sudo apt-get install git-core gnupg flex bison gperf build-essential zip curl zlib1g-dev libc6-dev lib32ncurses5-dev ia32-libs x11proto-core-dev libx11-dev lib32readline5-dev lib32z-dev libgl1-mesa-dev g++-multilib mingw32 tofrodos sudo apt-get install libsdl1.2-dev libesd0-dev libwxgtk2.6-dev build-essential zip curl libncurses5-dev zlib1g-dev valgrind 如果连续安装没有成功，可分别安装。以上命令等效于分别安装每个软 件： sudo apt-get install git-core sudo apt-get install gnupg……
+1.5-2
+
+第2章 Spreadtrum Android 的源码编译
+2.1 解压缩源码包至某工作目录
+
+tar -zxvf YourPackage.tar.gz 拿到的 IDH 包包括基础包和可选包， 需要把可选包解压以后放在正确的位置。 其中 uboot 的源代码目录 u-boot 要放在 Android 根目录下，hisense 和 CSR 包里面解压出来的各个 目录要放置在 3rdparty 子目录内。[如果客户使用 CSR BT/WIFI/GPS，需要和 CSR 签订 协议，才会得到我们的 CSR 包。]
+2.2 编译所有代码
+
+1. 进入 3rdparty：cd 3rdparty/ 2. .查看帮助信息(其中 openphone,sp8805ga,sp8810ga 是支持的产品列表) ： ./build.products.sh 3. sp8805ga 平台编译 ./build.products.sh sp8805ga 最终生成文件在目录 out/target/product/hsdroid 里面，其中 boot.img, system.img 和 userdata.img 是下载所需要的文件。 4. sp8810ga 平台编译 ./build.products.sh sp8810ga 最终生成文件在目录 out/target/product/hsdroid 里面，其中 boot.img, system.img 和 userdata.img 是下载所需要的文件。
+注意，3rdparty 目录里面的各个模块是否参加编译取决于 3rdparty/products/产品名/build.sh 里面定 义的模块，可以根据需要手动开关。
+
+2.3 单独编译 uboot ,spl 和 fdl2
+
+1. 进入 u-boot：cd u-boot/ 2. sp8805ga 平台编译 make CROSS_COMPILE=你的 android 路径/ prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi- sp8805ga_config
+
+2.3-3
+
+.............................
+
+make CROSS_COMPILE=你的 android 路径/ prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi最终生成文件在 u-boot 目录 uboot.bin 和 nand_spl/u-boot-spl-16k.bin。 make CROSS_COMPILE=你的 android 路径/ prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi- fdl2 最终生成文件在 u-boot 目录 nand_fdl/fdl2.bin。 3. sp8810ga 平台编译 make CROSS_COMPILE=你的 android 路径/ prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi- sp8810_config make CROSS_COMPILE=你的 android 路径/ prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi最终生成文件在 u-boot 目录 uboot.bin 和 nand_spl/u-boot-spl-16k.bin。 make CROSS_COMPILE=你的 android 路径/ prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi- fdl2 最终生成文件在 u-boot 目录 nand_fdl/fdl2.bin。
+2.4 单独编译 kernel
+
+1. 进入 kernel：cd kernel/ 2. 查看帮助信息(其中 openphone,sp8805ga,sp8810ga 是支持的产品列表) ： ./build.products.kernel.sh 3. sp8805ga 平台对应的 kernel 编译 ./build.products.kernel.sh sp8805ga 4. sp8810ga 平台对应的 kernel 编译 ./build.products.kernel.sh sp8810ga 最终生成文件为 out/target/product/hsdroid/boot.img，包含了 kernel 和 ramdisk 等 内容。 5. 如何执行 make menuconfig： cd out/target/product/hsdroid/obj/KERNEL.sp8805ga or sp8810ga make menuconfig
+
+2.4-4
+
+2.5 仅编译原生 Android
+
+Spreadtrum 的对原生 Android 作了修改，一部分修改直接位于 Android 目录下的源代码，另外一部分修改放置在 3rdparty 目录里面某些第三方 软件的 android 目录里， 在编译 android 之前会把它们复制到原生 android 目录里面，编译完毕后恢复原生代码。如果要自行修改这些会复制和恢 复的文件，要注意必须把修改部分置于 3rdparty 内相应目录。 在某些不考虑 3rdparty 代码的情况下，若要仅仅编译原生 Android，方 法同标准开源 android 编译方法： cd android source build/envsetup.sh //设置编译环境
+
+lunch //选择 sprdroid_base-eng 对应的数字来编译调试版本 make //会生成 system，userdata 等文件 mm <相应模块名字> //编译特定模块
+
+2.5-5

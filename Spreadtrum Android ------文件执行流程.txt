@@ -1,0 +1,547 @@
+8810文件执行流程
+
+www.spreadtrum.com
+
+Spreadtrum Android ------文件执行流程 v1.0.0
+TD Div
+
+上海·北京· 深圳· 圣迭戈· 韩国· 印度 人力资源部－培训发展组
+
+.1
+
+Innovation changes the future
+
+课程名称： android 文件执行流程 课程类别：通用课程
+课程目标： 1，了解8810G的Power On, bootloader，Kernel，Android的文件 执行流程。
+
+www.spreadtrum.com
+
+2
+
+主要内容
+
+Innovation changes the future
+
+Power up and address
+bootlaoder run
+
+Kernel run
+
+Android run
+
+Conclusion
+
+www.spreadtrum.com
+
+3
+
+ARM address table after reset
+size 256M 256M 256M 256M 256M 256M 256M 256M 256M start 0x0000,0000 0x1000,0000 0x2000,0000 0x3000,0000 0x4000,0000 0x5000,0000 0x6000,0000 0x7000,0000 0x8000,0000 end 0x0FFF,FFFF 0x1FFF,FFFF 0x2FFF,FFFF 0x3FFF,FFFF 0x4FFF,FFFF 0x5FFF,FFFF 0x6FFF,FFFF 0x7FFF,FFFF 0x8FFF,FFFF Sector (remap is register written @ powered up) External Memory Space (remap=0) IROM, Internal On-chip ROM Space, (remap=1) DSP-side Space(0x0000,0000-0x0FFF,FFFF there)
+
+Innovation changes the future
+
+Controller Registers (EM,DMA,DCAM,USB2.0,SDIO,LCD,Rotation,AHB…) IROM, Internal On-chip ROM Space, (remap=0) External Memory Space (remap=1) IRAM, Internal On-chip RAM Space (16K+16K+10K) 4k Dual port share memory with DSP Nand Control Space External Memory Space Peripheral Address Space (INTC, Timers, Watchdog Timer, RTCTimer, TP, Aux ADC, Ana_reg, Voice, UART/0/1/2,SIMCARD0/1,I2C,Kaypad, System Timer, PWM,GPIO,PIN,EPT,IIS,SPI) Reserved External Memory Space Reserved
+
+256M*3 256M*3 256M
+
+0x9000,0000 0xC000,0000 0xF000,0000
+
+0xBFFF,FFFF 0xEFFF,FFFF 0xFFFF,FFFF
+
+www.spreadtrum.com
+
+4
+
+上电
+
+Innovation changes the future
+
+下载流程 ?Rom code ?FDL 1 ?FDL 2
+
+开机流程 ?Rom code ?Bootloader 1: spl-16k ?Bootloader 2: u-boot ?VLX/nkcbsp ?Modem ?Linux/Android
+
+www.spreadtrum.com
+
+5
+
+IROM
+
+IROM entry
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+6
+
+下载流程和开机流程
+
+Innovation changes the future
+
+下载过程 ROM：0x00000000：与PC通信，下载FDL1到IRAM（0x40000000），并运行FDL1 FDL1：0x40000000：初始化SDRAM，与PC通信下载FDL2到SDRAM（0x00000000），并运行FDL2 FDL2：0x30000000：初始化NAND控制器，与PC通信下载其他Image到NAND flash。
+
+开机过程 ROM：0x00000000：判断是开机，复制spl到IRAM （0x40000000），并运行spl SPL： 0x40000000：初始化SDRAM，复制uboot到SDRAM（0x00f00000），并运行uboot UBOOT：0x00f00000:部分设备初始化，复制其他image到SDRAM（0x00000000），判断开机 模式并进入相应模式。
+
+www.spreadtrum.com
+
+7
+
+SPL link script
+
+Innovation changes the future
+
+u-boot/nand_spl/board/spreadtrum/sp8810/u-boot.lds ENTRY(_start) SECTIONS { . = 0x00000000; . = ALIGN(4); .text : { start.o (.text) lowlevel_init.o (.text) *(.text) } ……
+
+Genereted Map File: u-boot/nand_spl/u-boot-spl.map .text 0x40000000 0x1c0 start.o 0x40000000 _start 0x400000a4 _bss_start_ofs 0x400000a8 _bss_end_ofs 0x400000a0 _TEXT_BASE
+
+www.spreadtrum.com
+
+8
+
+SPL squence
+u-boot/arch/arm/cpu/armv7/start.S _start: b reset // 复位向量：无条件跳转到reset标号 ldr pc, _undefined_instruction // 未定义指令向量 ldr pc, _software_interrupt // 软件中断向量 ldr pc, _prefetch_abort // 预取指令异常向量 ldr pc, _data_abort // 数据操作异常向量 ldr pc, _not_used // 未使用 ldr pc, _irq // 中断向量 ldr pc, _fiq // 快速中断向量 … _TEXT_BASE: .word CONFIG_SYS_TEXT_BASE _bss_start_ofs: : .word __bss_start - _start _bss_end_ofs: : .word _end - _start IRQ_STACK_START_IN : .word 0x0badc0de reset: mrs r0,cpsr bic r0,r0,#0x1f orr r0,r0,#0xd3 msr cpsr,r0 mrc p15, 0, r1, c1, c0, 0 bic r1, #0x5 mcr p15, 0, r1, c1, c0, 0 bl cpu_init_crit //flush L1 I/D caches, disable MMU stuff and caches. mov r10, #0 LDR sp, =SVC_STACK_TEMP /*set up temp stack*/ STMDB sp!,{lr} bl lowlevel_init // Chip_Init();? sc8810_emc_Init();? ddr_init(); LDMIA sp!, {lr} LDR sp, =0x008f0000 /*Re-set up stack The sp here must be in the reserved region */
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+9
+
+Jump from SPL to UBOOT
+call_board_init_f: ldr bic ldr ldr ldr bl sp, =(CONFIG_SYS_INIT_SP_ADDR) sp, sp, #7 r0, =(CONFIG_SYS_INIT_SP_ADDR) r1, =0x00000000 r2, =(CONFIG_SYS_TEXT_BASE) relocate_code
+
+Innovation changes the future
+
+// Addr: 0x0 + 0x4000 /* 8-byte alignment for ABI compliance */ // Addr: 0x0 + 0x4000 //0x4000,0000
+
+.globl
+relocate_code: ……
+
+relocate_code
+
+ldr r0, _nand_boot_ofs mov pc, r0 ?jump to nand_boot() _nand_boot_ofs: .word nand_boot
+
+u-boot/nand_spl/nand_boot.c void nand_boot(void){ … board_nand_init(&nand_chip); … /* * Load U-Boot image from NAND into RAM */ … ret = nand_load(&nand_info, CONFIG_SYS_NAND_U_BOOT_OFFS, CONFIG_SYS_NAND_U_BOOT_SIZE, (uchar *)CONFIG_SYS_NAND_U_BOOT_DST); … uboot = (void *)CONFIG_SYS_NAND_U_BOOT_START; //0x00f0,0000 (*uboot)(); ?jump to uboot }
+
+设置各模式程序异常向量表，初始化处理器相关的关键 寄存器以及系统内存,copy nand and jump！ www.spreadtrum.com 10
+
+UBOOT link script
+u-boot/arch/arm/cpu/arm926ejs/u-boot.lds ENTRY(_start) SECTIONS { . = 0x00000000; . = ALIGN(4); .text : { arch/arm/cpu/arm926ejs/start.o (.text)//text段的起始地址就是start.s第一句_start的地址。 *(.text) } … __u_boot_cmd_start = .; .u_boot_cmd : { *(.u_boot_cmd) } __u_boot_cmd_end = .; … __bss_start = .; *(.bss) . = ALIGN(4); _end = .; …
+
+Innovation changes the future
+
+$cat u-boot.map 部分内容 .text 0x00f00000 0x460 arch/arm/cpu/armv7/start.o 0x00f00000 _start 0x00f00040 _TEXT_BASE 0x00f00044 _bss_start_ofs 0x00f00048 _bss_end_ofs
+
+www.spreadtrum.com
+
+11
+
+UBOOT sequence
+u-boot/arch/arm/cpu/armv7/start.S b reset // 复位向量：无条件跳转到reset标号 ldr pc, _undefined_instruction // 未定义指令向量 ldr pc, _software_interrupt // 软件中断向量 ldr pc, _prefetch_abort // 预取指令异常向量 ldr pc, _data_abort // 数据操作异常向量 ldr pc, _not_used // 未使用 ldr pc, _irq // 中断向量 ldr pc, _fiq // 快速中断向量 _TEXT_BASE: .word CONFIG_SYS_TEXT_BASE _bss_start_ofs: : .word __bss_start - _start _bss_end_ofs: : .word _end - _start IRQ_STACK_START_IN : .word 0x0badc0de
+
+Innovation changes the future
+
+reset:
+mrc p15, 0, r1, c1, c0, 0 bic r1, #0x5 mcr p15, 0, r1, c1, c0, 0 call_board_init_f: ldr sp, =(CONFIG_SYS_INIT_SP_ADDR) bic sp, sp, #7 /* 8-byte alignment for ABI compliance */ ldr r0,=0x00000000 bl board_init_f //call from board_init_f() in board.c
+
+设置各模式程序异常向量表，初始化寄存器SP，调 用board.c中的board_init_f()函数初始化外设，设置 内存分配区间. www.spreadtrum.com 12
+
+UBOOT sequence 2
+u-boot\arch\arm\lib\board.c
+
+Innovation changes the future
+
+void board_init_f (ulong bootflag){
+… gd = (gd_t *) ((CONFIG_SYS_INIT_SP_ADDR) & ~0x07); memset ((void*)gd, 0, sizeof (gd_t)); gd->mon_len = _bss_end_ofs; for (init_fnc_ptr = init_sequence; *init_fnc_ptr; ++init_fnc_ptr) if ((*init_fnc_ptr)() != 0) ;
+
+addr = CONFIG_SYS_SDRAM_BASE + gd->ram_size; /* reserve kernel log buffer */ addr -= (LOGBUFF_RESERVE); /* * reserve protected RAM */ addr -= (reg << 10); /* reserve TLB table */ addr -= (4096 * 4); / * reserve memory for VFD display (always full pages) /* reserve memory for LCD display (always full pages) */ /*reserve memory for U-Boot code, data & bss: addr -= gd->mon_len; /*reserve memory for malloc() arena /* setup stackpointer for exeptions */ gd->bd->bi_baudrate = gd->baudrate; /* Ram ist board specific, so move it to board code ... */ dram_init_banksize(); display_dram_config(); /* and display it */ gd->relocaddr = addr; gd->start_addr_sp = addr_sp; gd->reloc_off = addr - _TEXT_BASE; memcpy (id, (void *)gd, sizeof (gd_t)); relocate_code (addr_sp, id, addr); //call reloacate_code in start.s }
+
+init_fnc_t *init_sequence[] = { arch_cpu_init, /* basic arch cpu dependent setup */ board_early_init_f, timer_init, /* initialize timer */ get_clocks, env_init, /* initialize environment */ init_baudrate, /* initialze baudrate settings */ serial_init, /* serial communications setup */ console_init_f,/* stage 1 init of console */ display_banner,/* say that we are here */ print_cpuinfo, /* display cpu info (and speed) */ checkboard, /* display board info */ init_func_i2c, dram_init, /* configure available RAM banks */ arm_pci_init, };
+
+board_init_f()函数初始化外设，设置内存分配区间. www.spreadtrum.com 13
+
+UBOOT sequence 3
+arch/arm/cpu/arm926ejs/start.S
+
+Innovation changes the future
+
+relocate_code:
+mov mov mov … ldr r0, _board_init_r_ofs 对于代码在flash里的需要copy code，对我们的情 adr r1, _start 况，代码已经在ram里，无需copy/relocate。 add lr, r0, r1 add lr, lr, r9 /* setup parameters for board_init_r */ mov r0, r5 /* gd_t */ mov r1, r6 /* dest_addr */ /* jump to it ... */ mov pc, lr _board_init_r_ofs: .word board_init_r - _start //call board_init_r() in board.c r4, r0 r5, r1 r6, r2 /* save addr_sp */ /* save addr of gd */ /* save addr of destination */
+
+跳转到board_init_r()函数初始化部分外设，处理开 机模式，进入循环. www.spreadtrum.com 14
+
+UBOOT sequence 4
+u-boot\arch\arm\lib\board.c
+
+Innovation changes the future
+
+void board_init_r (gd_t *id, ulong dest_addr)
+{ … board_init(); /* Setup chipselects */ drv_arm_dcc_init (); serial_initialize(); i2c_init (CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE); logbuff_init_ptrs (); drv_lcd_init (); post_output_backlog (); drv_video_init (); mem_malloc_init (malloc_start, TOTAL_MALLOC_LEN); drv_keyboard_init (); nand_init(); /* go init the NAND */ drv_logbuff_init (); mmc_initialize(bd); drv_system_init (); env_relocate (); serial_stdio_init (); gd->bd->bi_ip_addr = getenv_IPaddr ("ipaddr"); drv_usbtty_init (); stdio_init (); /* get the devices list going. */ drv_nc_init (); jumptable_init (); drv_jtag_console_init (); api_init (); console_init_r (); /* fully init console as a device */ arch_misc_init (); misc_init_r (); interrupt_init (); enable_interrupts (); ADI_init(); chip_init(); LDO_Init(); board_late_init (); post_run (NULL, POST_RAM | post_bootmode_get(0)); do_cboot(NULL, 0, 1, NULL); /* main_loop() can return to retry autoboot, if so just run it again. */ 初始化外设，判断开机模式，进入命令 for (;;) { main_loop ();// 进入主循环 }
+
+循环，接收用户命令进行相应的处理。 15
+
+www.spreadtrum.com
+
+UBOOT sequence 5
+u-boot\property\cmd_cboot.c
+
+Innovation changes the future
+
+int do_cboot(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[]){
+… boot_pwr_check(); CHG_Init(); if(is_bat_low()){ power_down_devices(); while(1); } boot_pwr_check(); board_keypad_init(); boot_pwr_check();
+
+unsigned rst_mode= check_reboot_mode(); if(rst_mode == RECOVERY_MODE){ recovery_mode(); }else if(rst_mode == FASTBOOT_MODE){fastboot_mode(); }else if(rst_mode == NORMAL_MODE){ normal_mode(); }else if(rst_mode == ALARM_MODE && alarm_flag_check()){ alarm_mode(); }else if(rst_mode == SLEEP_MODE){ sleep_mode(); }
+ret = recovery_init(); if(ret == 1){recovery_mode();
+
+}
+
+}
+
+if(boot_pwr_check() >= get_pwr_key_cnt()){ key_mode = check_key_boot(key_code); switch(key_mode){ case BOOT_FASTBOOT: fastboot_mode(); break; case BOOT_RECOVERY: recovery_mode(); break; case BOOT_CALIBRATE: engtest_mode(); return; //back to normal boot break; case BOOT_DLOADER: dloader_mode(); break; default: break; } } else if(charger_connected()){ charge_mode(); } else if(alarm_triggered() && alarm_flag_check()){alarm_mode(); } else{ calibration_detect(0); power_down_devices(); while(1) ; } 在do_cboot()里面会根据寄存器，键盘按键状态，外
+
+设情况等条件进入不同的开机模式：正常开机，恢复 模式，fastboot，闹钟模式，充电模式，校准模式等。 www.spreadtrum.com 16
+
+UBOOT sequence 6 正常开机
+u-boot\property\normal_mode.c
+
+Innovation changes the future
+
+void normal_mode(void){
+vibrator_hw_init(); set_vibrator(1); vlx_nand_boot(BOOT_PART, NULL, BACKLIGHT_ON); }
+
+void vlx_nand_boot(char * kernel_pname, char * cmdline, int backlight_set){
+
+MMU_Init(CONFIG_MMU_TABLE_ADDR); ret = mtdparts_init(); ret = find_dev_and_part(SPLASH_PART, &dev, &pnum, &part); // #define SPLASH_PART "boot_logo“ ret = nand_read_offset_ret(nand, off, &size, (void *)bmp_img, &off); lcd_display_bitmap((ulong)bmp_img, 0, 0); /* recovery damaged fixnv or backupfixnv */ /* FIXNV_PART */ /* PRODUCTINFO_PART */ /* RUNTIMEVN_PART */ /* DSP_PART */ /* KERNEL_PART */ //kernel image and ramdisk image /* MODEM_PART */ /* VMJALUNA_PART */ sprintf(buf, "initrd=0x%x,0x%x", RAMDISK_ADR, hdr->ramdisk_size); sprintf(&buf[str_len], " %s", mtdpart_def); sprintf(&buf[str_len], " %s", cmdline); sprintf(&buf[str_len], " lcd_id=ID"); sprintf(&buf[str_len], "%x",lcd_id); sprintf(&buf[str_len], " factory"); creat_atags(VLX_TAG_ADDR, buf, NULL, 0); void (*entry)(void) = (void*) VMJALUNA_ADR; 正常开机模式下，在vlx_nand_boot ()里面依次读取DSP_PART， kernel/ramdisk，MODEM_PART，VMJALUNA_PART等并导入 MMU_DisableIDCM(); SDRAM，生成buf为cmdline参数的TAG后代码跳入虚拟机代码部分。 entry(); www.spreadtrum.com 17
+
+RAM address
+u-boot\property\normal_mode.c #define DSP_ADR #define VMJALUNA_ADR #define FIXNV_ADR #define PRODUCTINFO_ADR #define RUNTIMENV_ADR #define MODEM_ADR #define RAMDISK_ADR #define KERNEL_ADR #define VLX_TAG_ADDR 0x00020000 0x00400000 0x00480000 0x00490000 0x004a0000 0x00500000 0x04c00000 0x04508000 0x05100000 //after initrd #define DSP_SIZE #define VMJALUNA_SIZE #define FIXNV_SIZE #define PRODUCTINFO_SIZE #define RUNTIMENV_SIZE #define MODEM_SIZE
+
+Innovation changes the future
+
+(3968 * 1024) //3.875M (300 * 1024) //300K (64 * 1024) //64K (3 * 1024) //3K (256 * 1024) //256K (8 * 1024 * 1024) //8M
+
+size 128K 4M-128K 384K 128K 64K 64K,3k in fact 256K 128K 8M 56M 160M+ 32K 7M-32K 5M, 400k infact 148M+ … … 4M …
+
+start 0x0000,0000 0x0002,0000 0x0040,0000 0x0046,0000 0x0048,0000 0x0049,0000 0x004A,0000 0x004E,0000 0x0050,0000 0x00D0,0000 0x0450,0000 0x0450,0000 0x0450,8000 0x04C0,0000 0x0510,0000 …
+
+end 0x0001,FFFF 0x0003F,FFFF 0x0045,FFFF 0x0047,FFFF 0x0048FFFF 0x0049,FFFF 0x004D,FFFF 0x004F,FFFF 0x00EF,FFFF 0x044F,FFFF 0x0E4F,FFFF 0x0450,7FFF 0x04CF,FFFF 0x050F,FFFF … …
+
+Sector Null DSP nkcBSP/VLX Null Fix NV Product Info Runtime NV Null Modem code Null Linux Default command line Kernel Image ramdisk tag, User space … Reserved Shared memory for communication between AP and Modem. Not Configured
+
+www.spreadtrum.com
+
+18
+
+VLX
+
+Innovation changes the future
+
+VLX运行在单一ARM内核，允许多个OS运行，并允许OS之间共享外设，相互通信，满足实时性和可靠性的需求。
+
+www.spreadtrum.com
+
+19
+
+VLX 2
+
+Innovation changes the future
+
+VLX将RAM和I/O等硬件资源分区为主分区和两个次分区。CPU/MMU等资源按虚拟化方式提供给每一个 次分区上的OS使用，它们看起来是独占资源的。 1，Virtualizer：采用Default Scheduling策略来调度，切换到需要运行的OS，主分区具有最高优先级。 ThreadX的中断能打断Linux的中断，当ThreadX和Linux同时获得Ready状态时，优先调度 ThreadX进入运行，必须等ThreadX进入Idle之后Linux才能运行。 2，nkcBSP：在主分区上运行，屏蔽物理中断，提供虚中断和虚设备，负责处理虚中断处理相关工作。 当系统产生硬件中断时， Virtualizer首先将中断信号发送给nkcBSP，由nkcBSP决定虚中断信号发 给哪个OS。规划两个OS使用不同的中断源，使得屏蔽和解除屏蔽的处理简单化。芯片提供两个微秒 级的RTC Timer分别供两个OS使用，一个共享的毫秒级的Tick作为时钟基准。 3，ThreadX Plug-in：包含在ThreadX OS软件平台上的适配层代码。主要负责VIPC，VTimer等工作， 是ThreadX和Virtualizer/nkcBSP的接口模块。 4，Linux Plug-in：包含在Linux OS软件平台上的适配层代码。主要负责VIPC，VTimer等工作，是 Linux和Virtualizer/nkcBSP的接口模块。Linux负责睡眠管理， ThreadX执行到Idle时会把CPU控 制权交给Virtualizer，它调度Linux执行，Linux进入Idle之后调用sleep进入睡眠。系统被唤醒之后 控制权在Virtualizer，它根据中断源决定哪个OS运行。 ThreadX和Linux通过共享内存和交叉中断机制实现数据交互。
+
+控制: AT/mux/vuart 数据: veth 其它(例如modem arm log): vbpipe
+www.spreadtrum.com 20
+
+Kernel link script
+.text : { 下载的是boot.img, 也就是Image + ramdisk 所以kernel是非压缩的，无需解压缩直接运行。 /arch/arm/kernel/vmlinux.lds.S ENTRY(stext) //指定输出可执行文件起始代码为stext！ SECTIONS { . = PAGE_OFFSET + TEXT_OFFSET; .init : { /* Init code and data*/ _stext = .; _sinittext = .; HEAD_TEXT INIT_TEXT _einittext = .; __proc_info_begin = .; *(.proc.info.init) __proc_info_end = .; __arch_info_begin = .; *(.arch.info.init) __arch_info_end = .; __tagtable_begin = .; *(.taglist.init) __tagtable_end = .; INIT_SETUP(16) INIT_CALLS CON_INITCALL SECURITY_INITCALL INIT_RAM_FS ………
+
+Innovation changes the future
+
+/* Real text segment */ _text = .;/* Text and read-only data*/ __exception_text_start = .; *(.exception.text) __exception_text_end = .; TEXT_TEXT SCHED_TEXT LOCK_TEXT KPROBES_TEXT
+
+……… RO_DATA(PAGE_SIZE) _etext = .; /* End of text and rodata section */ /** Stack unwinding tables */ . = ALIGN(THREAD_SIZE); __data_loc = .; .data : AT(__data_loc) { _data = .; /* address in memory */ _sdata = .; INIT_TASK_DATA(THREAD_SIZE) ………
+
+_edata = .;
+} _edata_loc = __data_loc + SIZEOF(.data); .bss : { __bss_start = .; /* BSS *(.bss) *(COMMON) __bss_stop = .; _end = .; }
+
+*/
+
+www.spreadtrum.com
+
+21
+
+Kernel init 2
+System.map c4504000 A swapper_pg_dir//page table c4508000 T __init_begin c4508000 T _sinittext c4508000 T _stext c4508000 T stext c452C000 T _text c4a1e000 A __data_loc c4a1e000 D _data c4a1e000 D _sdata C4a69d20 B __bss_start C4b5aa20 B __bss_stop C4b5aa20 B _end #define ENTRY(name) \ .globl name; \ ALIGN; \ name: 宏 TEXT_START TEXT_OFFSET PAGE_OFFSET PHYS_OFFSET
+
+Innovation changes the future
+
+Kernel的入口函数在
+head.s (arch\arm\kernel) /* * Kernel startup entry point. * --------------------------* * This is normally called from the decompressor code. The requirements * are: MMU = off, D-cache = off, I-cache = dont care, r0 = 0, * r1 = machine nr, r2 = atags pointer. ????CPU必须处于SVC(supervisor)模式,并且IRQ和FIQ中断都是禁止的; */ .section ".text.head", "ax" ENTRY(stext) ?????????
+
+值 说明 0xc4508000 //kernel 链接地址，虚拟地址！ 0x04508000 //内核相对于存储空间的偏移 // arch/arm/Makefile, kernel image offset in RAM 0xc0000000 //Page offset: 3GB 0x00000000 //RAM的起始物理地址
+
+未开启MMU之前，运行地址为实际物理地址0x0450,8000,但是链接地址是0xc450,8000. 遇到代码数据寻址，需要软件转换。运行地址=链接地址+地址差别,使用ADR指令，取当前pc+relative。
+
+www.spreadtrum.com
+
+22
+
+head.s (arch\arm\kernel) stext: mov r12, sp @ save os_ctx in r12 (unused) ldr sp, __switch_data + 36 @ set an initial sp ldr r9, _os_ctx @ store os_ctx pointer str r12, [r9] @ at its location ldr r1, [r12, #ctx_arch_id_off] @ load arch_id from os_ctx mov r0, #0 @ clear r0 to fulfill @ boot requirements mrc p15, 0, r9, c0, c0 @ get processor id //从arm协处理器里面读到CPU ID，比如ARM9，ARM11等等。 bl __lookup_processor_type @ r9=cpuid //in head-common.S，从定义在“.proc.info.init”段 [from __proc_info_begin]中的处理器信息表中查询处理器信息. output r5=procinfo movs r10, r5 @ invalid processor (r5=0)? beq __error_p @ yes, error 'p‘ bl __lookup_machine_type @ r1=machid //in head－common.S，从定义在“.arch.info.init”段 [from __arch_info_begin]中的机器信息表中检查机器类型, output r5=machinfo movs r8, r5 @ invalid machine (r5=0)? beq __error_a @ yes, error 'a‘ bl __vet_atags @检查atags parameter的有效性。 bl __create_page_tables @创建初始化页表。 ldr r13, __switch_data @ address to jump to after//将__switch_data这个symbol的链接地址放在sp里面 @ mmu has been enabled adr lr, BSYM(__enable_mmu) @ return (PIC) address //获得__enable_mmu的物理地址 ARM(add pc, r10, #PROCINFO_INITFUNC) @跳到__proc_info_list里面的INITFUNC执行，这个偏移是定义在 arch/arm/kernel/asm-offset.c里面，取得__proc_info_list里的__cpu_flush执行，就是proc-*.S里面的_setup(). __v7_setup: in \arch\arm\mm\proc-v7.S: ??mov pc, lr //lr存储的是__enable_mmu地址。 __enable_mmu：??mov pc, r13 //r13存储__switch_data 结构体地址[head-common.S]，跳到函数指针__mmap_switched处执行。
+
+Kernel init 3
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+23
+
+Kernel init 4
+
+Innovation changes the future
+
+当kernel匹配芯片类型，建立页表，打开MMU，并完成C代码运行环境等初始化结束之后，使用代码b start_kernel 来跳到 C 程序 的入口函数 start_kernel()处，开始之后的内核初始化工作。 head-common.S (arch\arm\kernel): /* * The following fragment of code is executed with the MMU on in MMU mode, * and uses absolute addresses; this is not position independent. */ __mmap_switched: adr r3, __switch_data + 4 ldmia r3!, {r4, r5, r6, r7} cmp r4, r5 @ Copy data segment if needed， data is initialized! 1: cmpne r5, r6 ldrne fp, [r4], #4 strne fp, [r5], #4 bne 1b mov fp, #0 @ Clear BSS (and zero fp), Block Started by Symbol segment,未初始化的全局变量,系统清0先！ 1: cmp r6, r7 strcc fp, [r6],#4 ARM( ldmia r3, {r4, r5, r6, r7, sp}) bcc 1b THUMB( ldmia r3, {r4, r5, r6, r7} ) ldr r4, _os_ctx @ save pointer to os_ctx THUMB( ldr sp, [r3, #16] ) str r9, [r4] @ Save processor ID str r12, [r4] str r1, [r5] @ Save machine type//机器ID ldr r4, _irq_ena_off str r2, [r6] @ Save atags pointer//内核参数 add r12, r12, r4 bic r4, r0, #CR_A@ Clear 'A' bit ldr r4, _irq_enabled stmia r7, {r0, r4} @ Save control register values str r12, [r4] b start_kernel ldr r4, _irq_enabled1 ENDPROC(__mmap_switched) str r12, [r4]
+
+www.spreadtrum.com
+
+24
+
+Kernel流程图
+
+Innovation changes the future
+
+常 见 应 用 框 架
+
+www.spreadtrum.com
+
+25
+
+Start_kernel
+
+Innovation changes the future
+
+init/main.c start_kernel()是所有 Linux 平台进入系统内核初始化后的入口函数，它主要完成剩余的与硬 件平台相关的初始化工作，在进行一系列与内核相关的初始化后，调用第一个用户进程－ init 进程并等待用户进程的执行，这样整个 Linux 内核便启动完毕。 该函数所做的具体工作： ? 1) 调用 setup_arch()函数进行与体系结构相关的第一个初始化工作； arch/arm/kernel/setup.c。进行处理器内核的初始化，内存结构的初始化，开启 MMU，创 建内核页表，映射所有的物理内存和IO空间。 常 ? 2) 创建异常向量表和初始化中断处理函数； 见 ? 3) 初始化系统核心进程调度器和时钟中断处理机制； 应 ? 4) 初始化串口控制台（ serial-console）； 用 ? 5) 创建和初始化系统 cache，为各种内存调用机制提供缓存，包括;动态内存分配，虚拟文 框 ? 件系统（Virtual File System）及页缓存。 架 ? 6) 初始化内存管理，检测内存大小及被内核占用的内存情况； ? 7) 初始化系统的进程间通信机制（IPC）； 当以上所有的初始化工作结束后，最后调用 rest_init()函数，包括创建系统的第一个进程－ init进程来结束内核的启动。
+www.spreadtrum.com 26
+
+Linux to First process main.c(kernel/init)
+
+Innovation changes the future
+
+asmlinkage void __init start_kernel(void) void __init setup_arch(char **cmdline_p){ setup_processor(); { mdesc = setup_machine(machine_arch_type); setup_arch(&command_line); tags = (struct tag*)os_ctx->taglist; ATAG_CORE .. parse_tags(tags); ATAG_MEM rest_init(); parse_early_param(); ATAG_TTB_FLAGS } nk_meminfo_setup(); ATAG_VIDEOTEXT paging_init(mdesc); static noinline void __init_refok rest_init(void) ATAG_RAMDISK (NA) nk_request_io_resources(); ATAG_SERIAL __releases(kernel_lock){ request_standard_resources( ATAG_REVISION kernel_thread(kernel_init, NULL, &meminfo, mdesc); ATAG_CMDLINE CLONE_FS | CLONE_SIGHAND); cpu_init(); … tcm_init(); nk_console_init(); schedule(); //启动调度器 early_trap_init(); cpu_idle();//启动进程进入空闲状态，系统交给调度器来管理 } } static int __init kernel_init(void * unused){ static void __init do_basic_setup(void){ … do_basic_setup(); 常 init_workqueues(); if (!ramdisk_execute_command) cpuset_init_smp(); 见 ramdisk_execute_command = “/init”; usermodehelper_init(); if (sys_access((const char __user *) ramdisk_execute_command, 0) != 0) { 应 init_tmpfs(); ramdisk_execute_command = NULL; driver_init(); 用 init_irq_proc(); prepare_namespace(); //call initrd_load() or mount_root() do_ctors(); //then sys_mount(".", "/", NULL, MS_MOVE, NULL); 框 do_initcalls();/ } /执行各驱动模块加载函数, module_init() 。 init_post(); 架 } } static noinline int init_post(void) __releases(kernel_lock){ run_init_process(ramdisk_execute_command); … } static void run_init_process(char *init_filename){ argv_init[0] = init_filename; kernel_execve(init_filename, argv_init, envp_init); } www.spreadtrum.com 27
+
+Setup.c(kernel/arch/arm/kernel/)
+
+Android Architecture with HAL
+
+Innovation changes the future
+
+常 见 应 用 框 架
+
+www.spreadtrum.com
+
+28
+
+Android Images
+
+Innovation changes the future
+
+在编译android 之后，会生成几个image 文件， 这些文件是： 1。 ramdisk.img : 根文件系统，一个分区影像文件，它会在kernel 启动的时候，以只读的方式被 mount ，包含了 /init 以及一些配置文件， 被用来调用init，以及把真正的root file system mount 起来。 2。system.img：是包含了整个系统，android 的framework， application 等等，会被挂接到 “/system” 上，包含了系统中所有的二进 制文件。 常 3。 userdata.img ： 将会被挂接到 /data 下，包含了所有应用相关的配 见 置文件，以及用户相关的数据 。 应 系统启动时在 kernel挂载ramdisk.img，接着在init里面会分别把 用 system.img 框和userdata.img挂载到 ramdisk下的目录。 架
+
+www.spreadtrum.com
+
+29
+
+Android Begins
+
+Innovation changes the future
+
+常 见 应 用 框 架
+
+www.spreadtrum.com
+
+30
+
+Android First process -- init
+
+Innovation changes the future
+
+因为执行了ramdisk里面的/init,从而跳入了Android代码。Init入口为Android里的system/core/init/init.c的 main函数。会逐次运行init.rc和init.%HARDWARE%.rc里面列出的进程和服务。 main() in android\system\core\init\init.c: 1. 为rootfs建立必要的文件夹并挂载适当的分区至/dev, /dev/pts, /proc, /sys。创建/dev/null和/dev/kmsg 节点。而rc文件会建立其余的文件夹。 2. 解析init.rc，将所有服务和操作信息加入链表。从/proc/cmdline中提取信息内核启动参数,并保存到全局变 量。获取硬件信息和版本号，根据硬件号解析init.%hardware%.rc文件，将服务和操作信息加入链表。 3. 执行链表中触发标识为“early-init”的命令。 4. 处理wait_for_coldboot_done，property_init，keychord_init，console_init和set_init_properties。 5. 解析init.%hardware%. 3rdparty. rc文件，将服务和操作信息加入链表。 6. 执行链表中触发标识为“init”，“early-fs”，“fs”，“post-fs"的命令。 7. 处理property_service_init，signal_init和check_startup。 8. 执行触发标识为early-boot和boot的action。 9. 基于当前property状态，处理queue_propety_triggers。 10. 注册轮询事件至ufds数组: device_fd; property_set_fd; signal_recv_fd; keychord_fd。 11. 进入for无限循环，确保这个init进程永驻不退出。
+
+www.spreadtrum.com
+
+31
+
+Android Init Language
+
+Innovation changes the future
+
+Android Init Language @system/core/init/readme.txt --------------------The Android Init Language consists of four broad classes of statements, which are Actions, Commands, Services, and Options. Action is like: on <trigger> <command> <command> … service <name> <pathname> [ <argument> ]* <option> <option>// modifiers to services. They affect how and when init runs the service. ...
+
+www.spreadtrum.com
+
+32
+
+Init.rc paragraph
+
+Innovation changes the future
+
+mount yaffs2 mtd@system /system mount yaffs2 mtd@userdata /data nosuid nodev chown system system /data chmod 0771 /data … service console /system/bin/sh ?// Services are programs which init launches and (optionally) restarts when they exit. console … service servicemanager /system/bin/servicemanager user system //Change to username before exec'ing this service. Current is root critical ?// This is a device-critical service. If it exits more than four times in four minutes, the device will reboot into recovery mode. onrestart restart zygote ?// Execute a Command (see below) when service restarts onrestart restart media service ril-daemon /system/bin/rild_sp -l /system/lib/libreference-ril_sp.so -- -d /tmp/atchannel0 socket rild stream 660 root radio ?//Create a unix domain socket named /dev/socket/<name> and pass its fd to process. socket rild-debug stream 660 radio system user root group radio cache inet misc audio ?//Change to groupname before exec'ing this service. …… service zygote /system/bin/app_process -Xzygote /system/bin --zygote --start-system-server socket zygote stream 666 onrestart write /sys/android_power/request_state wake onrestart write /sys/power/state on onrestart restart media …… service media /system/bin/mediaserver user media group system audio camera graphics inet net_bt net_bt_admin net_raw radio ioprio rt 4 ……
+
+www.spreadtrum.com
+
+33
+
+init.sp8810.rc
+
+Innovation changes the future
+
+on init loglevel 3 on boot setprop ro.recvkeys 115,114,116,212 setprop ro.recvkey.up 115 setprop ro.recvkey.down 114 setprop ro.recvkey.enter 116 setprop ro.recvkey.home 212 setprop ro.recvkey.power 116 setprop ro.gpu mali
+
+www.spreadtrum.com
+
+34
+
+init.sp8810.3rdparty.rc
+on init chown system system /data/app on boot setprop hal.sensor.magdirection 6 setprop ro.hisense.cmcc.test 0 setprop ro.hisense.cmcc.test.cmmb.wire 0 setprop ro.mbbms.ua 4G_W4-mocorsmart11.31-mbbms2
+
+Innovation changes the future
+
+#start nvitem daemon. service nvitem /system/bin/nvitemd oneshot #start upnvprop daemon. service upnvpropd /system/xbin/upnvpropd.sh oneshot # on boot insmod /system/lib/modules/snd_dummy.ko enable=1 pcm_devs=2 pcm_substreams=1 id=snddummy on init setprop ro.gpio.wifi_power -1 setprop ro.gpio.wifi_reset 140 ... on boot insmod /system/lib/modules/headset.ko on boot insmod /system/lib/modules/inno_plat.ko insmod /system/lib/modules/inno_core.ko insmod /system/lib/modules/inno_lgx.ko service cmmb /system/bin/cmmbserver user root group system
+
+www.spreadtrum.com
+
+35
+
+init.sp8810.3rdparty.rc 2
+# GSD4t on init device /dev/gsd4t 666 system system on boot insmod /system/sps/gsd4t/ko/gpsctl.ko
+
+Innovation changes the future
+
+on init chown system system /dev/ttyS2 # end on boot
+insmod /system/lib/modules/kt0812g_fm_ctrl.ko device /dev/KT0812G_FM 666 system audio on init device /dev/ump 666 system graphics device /dev/mali 666 system graphics on boot insmod /system/sps/mali/ko/ump.ko ump_debug_level=2 insmod /system/sps/mali/ko/mali.ko mali_debug_level=2 on boot insmod /system/lib/modules/lis3dh_acc.ko on init device /dev/lis3dh_acc 660 system system on init # export PATH /system/tools-binary:$PATH mount debugfs debugfs /d
+
+www.spreadtrum.com
+
+36
+
+init.sp8810.3rdparty.rc 3
+service logs4android /system/bin/logwrapper /system/xbin/logs4android.sh ^^ ^eng # disabled service logs4androidbt /system/bin/logwrapper /system/xbin/logs4android.bt.service.sh ^^ ^eng disabled oneshot on property:logs4android.enable=1 start logs4android on property:logs4android.enable=0 stop logs4android on init device /dev/al3006_pls 666 system system on boot insmod /system/sps/AL3006/ko/al3006_pls.ko on init chmod 0660 /sys/class/rfkill/rfkill0/state chmod 0660 /sys/class/rfkill/rfkill0/type chown bluetooth bluetooth /sys/class/rfkill/rfkill0/state chown bluetooth bluetooth /sys/class/rfkill/rfkill0/type write /sys/module/sco/parameters/disable_esco Y service hciattach /system/bin/hciattach.csr.sh user root oneshot on boot setprop wifi.interface wlan0 mkdir /data/misc/wifi 0770 wifi wifi mkdir /data/misc/wifi/sockets 0770 wifi wifi mkdir /data/misc/dhcp 0770 dhcp dhcp mkdir /inittest_load chown dhcp dhcp /data/misc/dhcp chmod 0777 /system/etc/dhcpcd/dhcpcd-run-hooks chmod 777 /system/bin/synergy_service chmod 777 /data/synergy/sched.cap chmod 777 /data/synergy/log.txt chmod 777 /system/bin/unififw
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+37
+
+init.sp8810.3rdparty.rc 4
+
+Innovation changes the future
+
+service dhcpcd_wlan0 /system/bin/logwrapper /system/bin/dhcpcd -d -B wlan0 disabled oneshot service wpa_supplicant /system/bin/logwrapper /system/bin/wpa_supplicant -Dwext -iwlan0 -c/data/misc/wifi/wpa_supplicant.conf user root group wifi inet socket wpa_wlan0 dgram 660 wifi wifi oneshot service synergy /system/bin/synergy_service user root oneshot service shutdownanim /system/bin/shutdownanim user graphics group graphics disabled oneshot on early-boot insmod /system/lib/modules/akm8975.ko on init device /dev/akm8975_dev 660 system system on boot chown system system /sys/class/compass/akm8975/enable_acc chown system system /sys/class/compass/akm8975/enable_mag chown system system /sys/class/compass/akm8975/enable_ori chown system system /sys/class/compass/akm8975/delay_acc chown system system /sys/class/compass/akm8975/delay_mag chown system system /sys/class/compass/akm8975/delay_ori chown system system /sys/class/compass/akm8975/accel service akmd /system/bin/akmd8975 -m 3 oneshot on boot insmod /system/sps/PIXCIR/ko/pixcir_i2c_ts.ko service ctpcali /system/bin/ctpcali user root oneshot
+
+www.spreadtrum.com
+
+38
+
+Processes after init
+
+Innovation changes the future
+
+Android系统进程 Android几个重要的系统进程为/init、/system/bin/servicemanager、 /system/bin/mediaserver、zygote及system_server。 init通过解析init.rc,启动对应的服务程序。servicemanager、zygote、mediaserver 就是通过这种方式启动； system_server则通过zygote孵化出来。这几个进程是Android系统运行的基础。 （1）servicemanager是Binder的服务管理守护进程，也是Binder机制的核心，所 有Binder服务都会通过它进行注册，客户端再通过它获取服务接口。 （2）zygote是Android java部分的孵化器，也就是Android java框架的基础。 zygote首先孵化出system_server,这是Android绝大多数系统服务的守护进程。之后 system_server与zygote一起完成其他所有Android的应用程序进程的启动。 （3）mediaserver是多媒体服务的守护进程，负责多媒体播放、照相摄像、音频三 项服务。
+
+www.spreadtrum.com
+
+39
+
+Zygote start
+1， service zygote /system/bin/app_process -Xzygote /system/bin --zygote --start-system-server 2，执行app_process，entry: main() in frameworks\base\cmds\app_process\app_main.cpp 调用runtime.start("com.android.internal.os.ZygoteInit", StartSystemServer); 启动ZygoteInit start() is in class AndroidRuntime of frameworks\base\core\jni\AndroidRuntime.cpp。 3，void AndroidRuntime::start(const char* className, const bool startSystemServer) … startVm(&mJavaVM, &env); /* start the virtual machine */创建JAVA 虚拟机 ， startReg(env) ; /*Register android functions. */为JAVA 虚拟机注册android 本地函数 … startSystemServerStr = env->NewStringUTF(startSystemServer ? "true" : "false"); env->SetObjectArrayElement(strArray, 1, startSystemServerStr); startClass = env->FindClass(slashClassName); startMeth = env->GetStaticMethodID(startClass, "main", "([Ljava/lang/String;)V");/ env->CallStaticVoidMethod(startClass, startMeth, strArray);//调用 main()@com.android.internal.os.ZygoteInit.java 4， main() in (frameworks\base\core\java\com\android\internal\os\ZygoteInit.java //装载ZygoteInit类,注册zygote socket, preload资源，启动SystemServer // Start profiling the zygote initialization. registerZygoteSocket(); preloadClasses(); preloadResources(); if (argv[1].equals("true")) { startSystemServer();//启动SystemServer进程 … www.spreadtrum.com
+
+Innovation changes the future
+
+40
+
+Zygote start 2
+
+Innovation changes the future
+
+5, StartSystemServer() @ (frameworks\base\core\java\com\android\internal\os\ZygoteInit.java String args[] = {… "com.android.server.SystemServer", parsedArgs = new ZygoteConnection.Arguments(args); /* Request to fork the system server process */ pid = Zygote.forkSystemServer(//调用 Zygote::forkSystemServer来fork一个新进程SystemServer！ parsedArgs.uid, parsedArgs.gid, parsedArgs.gids, debugFlags, null); /* For child process */ if (pid == 0) { handleSystemServerProcess(parsedArgs); } 6, JNI table dalvik/vm/native/dalvik_system_Zygote.c: const DalvikNativeMethod dvm_dalvik_system_Zygote[] = { { "fork", "()I", Dalvik_dalvik_system_Zygote_fork }, { "forkAndSpecialize","(II[II[[I)I", Dalvik_dalvik_system_Zygote_forkAndSpecialize }, { "forkSystemServer","(II[II[[I)I", Dalvik_dalvik_system_Zygote_forkSystemServer }, { NULL, NULL, NULL }, }; 7, c++ function static void Dalvik_dalvik_system_Zygote_forkSystemServer(const u4* args, JValue* pResult) { pid_t pid; pid = forkAndSpecializeCommon(args);?pid=fork(); … RETURN_INT(pid); } www.spreadtrum.com 41
+
+Systemserver start
+
+Innovation changes the future
+
+1, SystemServer进程起来执行main() @com.android.server.SystemServer 是因为handleSystemServerProcess(parsedArgs)实际上调用了： RuntimeInit.zygoteInit(parsedArgs.remainingArgs); 在zygoteInit(String[] argv)@/frameworks/base/core/java/com/Android/internal/os/RuntimeInit.java 依次调用zygoteNative()@/frameworks/base/core/java/com/Android/internal/os/RuntimeInit.java invokeStaticMain() @/frameworks/base/core/java/com/Android/internal/os/RuntimeInit.java 在invokeStaticMain()中 m = cl.getMethod(“main”, new Class[] { String[].class }); ZygoteInit.MethodAndArgsCaller(m, argv); //执行的是SystemServer类的main函数 2，main() @ frameworks\base\services\java\com\android\server\SystemServer.java public static void main(String[] args){ … VMRuntime.getRuntime().setTargetHeapUtilization(0.8f); System.loadLibrary("android_servers"); init1(args); } 3，JNI 【frameworks\base\services\jni，libandroid_servers.so提供了JNI调用】 static JNINativeMethod gMethods[] = { /* name, signature, funcPtr */ { "init1", "([Ljava/lang/String;)V", (void*) android_server_SystemServer_init1 }, }; 4，C++ func static void android_server_SystemServer_init1(JNIEnv* env, jobject clazz) { system_init(); } www.spreadtrum.com
+
+42
+
+Systemserver 2 –Native Service
+5, system_init() @ android\frameworks\base\cmds\system_server\library\system_init.cpp， extern "C" status_t system_init() { sp<ProcessState> proc(ProcessState::self()); sp<IServiceManager> sm = defaultServiceManager(); sp<GrimReaper> grim = new GrimReaper(); sm->asBinder()->linkToDeath(grim, grim.get(), 0); char propBuf[PROPERTY_VALUE_MAX]; property_get("system_init.startsurfaceflinger", propBuf, "1"); if (strcmp(propBuf, "1") == 0) { // Start the SurfaceFlinger SurfaceFlinger::instantiate(); } … if (!proc->supportsProcesses()) { … } LOGI("System server: starting Android runtime.\n"); AndroidRuntime* runtime = AndroidRuntime::getRuntime(); LOGI("System server: starting Android services.\n"); runtime->callSetatic(“com/android/srvmer/SystemServer”, “init2”); if (proc->supportsProcesses()) { LOGI("System server: entering thread pool.\n"); ProcessState::self()->startThreadPool(); IPCThreadState::self()->joinThreadPool();//进入service dispatcher. LOGI("System server: exiting thread pool.\n"); } www.spreadtrum.com
+
+Innovation changes the future
+
+43
+
+Systemserver 3 –Android Service
+
+Innovation changes the future
+
+6, init2()启动ServerThread线程 @frameworks\base\services\java\com\android\server\SystemServer.java public static final void init2() { Slog.i(TAG, "Entered the Android system server!"); Thread thr = new ServerThread(); thr.setName("android.server.ServerThread"); thr.start(); } } 7, ServerThread线程启动所有 ANDROID 的服务 @SystemServer.java，启动JAVA服务。在run()中启动电源管理、蓝牙等核心服务以及状态。在 ServerThread后半段，启动完所有Android服务后，使用xxx.systemReady()通知个服务，系统已经 就绪。 Run() in frameworks/base/services/java/com/android/server/SystemServer.java // Critical services... try { ServiceManager.addService("entropy", new EntropyService()); power = new PowerManagerService(); ServiceManager.addService(Context.POWER_SERVICE, power); …… ((ActivityManagerService)ActivityManagerNative.getDefault()) .systemReady(new Runnable() { public void run() { if (batteryF != null) batteryF.systemReady(); if (connectivityF != null) connectivityF.systemReady(); …… www.spreadtrum.com 44
+
+service from Init2
+Power Manager Activity Manager Telephony Registry Package Manager Activity Manager Service Context Manager System Context Providers Battery Service Alarm Manager Sensor Service Window Manager Bluetooth ServiceMount Service Status Bar Service Hardware Service NetStat Service Connectivity Service Notification Manager DeviceStorageMonitor Service Location Manager Search Service Clipboard Service Checkin Service Wallpaper Service Audio Service HeadsetObserver AdbSettingsObserver 等等
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+45
+
+Systemserver 4
+
+Innovation changes the future
+
+8, ActivityManagerService.systemReady() 启动所有常驻应用 In frameworks\base\services\java\com\android\server\am\ActivityManagerService.java public void systemReady(final Runnable goingCallback) { … List apps = ActivityThread.getPackageManager(). getPersistentApplications(PackageManager.GET_SHARED_LIBRARY_FILES); if (apps != null) { int N = apps.size(); int i; for (i=0; i<N; i++) { ApplicationInfo info = (ApplicationInfo)apps.get(i); if (info != null && !info.packageName.equals("Android")) { addAppLocked(info); ?启动常驻应用,常驻应用在AndroidManifest.xml中有android:persistent=“true”, 比如 /packages/apps/Phone，/framework/base/core/res，某些3rdparty等。 … 9, 继续启动HOME resumeTopActivityLocked(null); ?调用startHomeActivityLocked(). 发送 Intent.CATEGORY_HOME 的INTENT启动HOME主 屏程序Launcher应用。 } 10, 启动其他应用 在ActivityManagerService 检测到空闲的时候，会发送 ACTION_BOOT_COMPLETED INTENT，导致MMS, AlarmClock, Calendar等应用启动。 www.spreadtrum.com 46
+
+Servicemanager start
+service servicemanager /system/bin/servicemanager frameworks\base\cmds\servicemanager\service_manager.c
+
+Innovation changes the future
+
+int main(int argc, char **argv){ struct binder_state *bs; void *svcmgr = BINDER_SERVICE_MANAGER; bs = binder_open(128*1024); //打开/dev/binder设备 if (binder_become_context_manager(bs)) { //将自己设置为Service Manager,它是可以管理其他服务的服务 LOGE("cannot become context manager (%s)\n", strerror(errno)); return -1; } svcmgr_handle = svcmgr; binder_loop(bs, svcmgr_handler);//进入循环并设置回调函数，当添加新服务或客户端获取某个服务时会触发。 return 0; }
+
+Servicemanager是Android Binder机制的一个组成部分，负责管理系统中的所有服务， 当客户端要与服务端进行通信时，首先通过Service Manager来查询和取得所要交互的 服务。而每个服务也要向servicemanager注册自己能提供的服务。而注册服务实际上是 通过在本地创建sm代理BpServiceManager并调用其addService()函数实现的。
+
+www.spreadtrum.com
+
+47
+
+Mediaserver start—Native Service
+service media /system/bin/mediaserver frameworks/base/media/mediaserver/ main_mediaserver.cpp int main(int argc, char** argv){ sp<ProcessState> proc(ProcessState::self()); sp<IServiceManager> sm = defaultServiceManager(); LOGI("ServiceManager: %p", sm.get()); AudioFlinger::instantiate(); //调用addService “media.audioflinger” MediaPlayerService::instantiate(); //调用addService “media.player” CameraService::instantiate(); //调用addService “ AudioPolicyService::instantiate(); //调用addService “ ProcessState::self()->startThreadPool(); //创建线程池并启动 IPCThreadState::self()->joinThreadPool(); }
+
+Innovation changes the future
+
+客户端创建相应服务的代理BpXxxService后，通过它与BnXxxService进行进程间通信。
+
+www.spreadtrum.com
+
+48
+
+修改记录
+版本 V0.1 V1.0.0 日期 2011.08.24 2012.02.28 作者 XQ XQ 说明 初稿 针对8810做了部分修改
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+49
+
+www.spreadtrum.com
+Innovation changes the future
+
+谢谢
+
+上海· 北京· 深圳· 圣迭戈· 韩国·印度
+
+www.spreadtrum.com
+
+50
+

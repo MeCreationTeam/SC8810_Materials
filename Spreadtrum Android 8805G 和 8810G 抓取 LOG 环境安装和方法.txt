@@ -1,0 +1,210 @@
+Spreadtrum Android 8805和8810抓取LOG环境安装和方法V1.0.5
+
+Spreadtrum Android 8805G 和 8810G 抓 取 LOG 环境安装和方法
+
+Version: 1.0.5 DocCode: Date: 2012-04-05
+
+www.spreadtrum.com
+
+重要声明
+版权声明
+本文档中的任何内容受 《中华人民共和国著作权法》 的保护， 版权所有 ? 2010, 展 讯通信有限公司，保留所有权利，但注明引用其他方的内容除外。
+
+商标声明
+展讯通信有限公司和展讯通信有限公司的产品是展讯通信有限公司专有。在提及 其他公司及其产品时将使用各自公司所拥有的商标， 这种使用的目的仅限于引用。
+
+不作保证声明
+展讯通信有限公司不对此文档中的任何内容作任何明示或暗示的陈述或保证，而 且不对特定目的的适销性及适用性或者任何间接、特殊或连带的损失承担任何责 任。
+
+保密声明
+本文档（包括任何附件）包含的信息是保密信息。接收人了解其获得的本文档是 保密的，除用于规定的目的外不得用于任何目的，也不得将本文档泄露给任何第 三方。
+
+前
+文档说明
+
+言
+
+本文档针对展讯 SC8805G/SC8810G Android 抓取 log 的环境安装和使用方法。
+
+阅读对象
+本文档提供给展讯基带芯片 SC8805G/SC8810G 进行相关设计的客户及内部相 关工程师。
+
+内容介绍
+本文档包括若干章节 ?
+
+文档约定
+本文档采用下面醒目标志来表示在操作过程中应该特别注意的地方。
+
+注意： 提醒操作中应注意的事项。
+
+说明： 说明比较重要的事项。
+
+本文档中描述为【推荐使用】字样，表示其和展讯 SC8805G/SC8810G 平台参考 设计一致。建议客户设计最好参照【推荐使用】 ，这样底层驱动改动最小，有利于 产品软件开发。
+
+相关文档
+无
+
+附录A 修改记录
+Version 1.0.0 1.0.1 1.0.2 1.0.3 1.0.4 1.0.5 Date 2011-09-01 2012-01-11 2012-02-06 2012-02-09 2012-02-10 2012-04-05 JZ XQ XQ XQ XQ XQ Owner Created Modified Add dsp log through USB Revise a clerical error, Add card log for Android and ARM Add log saved to SD card, Add other logs and log bat file. Revise error for DSP log endian to Little Endian. Notes
+
+目
+
+录
+
+附录 A 修改记录 ........................................................................................................................................... ii 第 1 章 Spreadtrum Android LOG 简介 ................................................................................................. 1-1 第 2 章 环境安装和工具 ............................................................................................................................ 2-2 2.1 USB 驱动安装 ............................................................................................................................... 2.1-2 2.2 adb 和 fastboot 工具 ...................................................................................................................... 2.2-3 2.3 写入 USB VID .............................................................................................................................. 2.3-3 2.4 ARM LOG 工具 ............................................................................................................................ 2.4-4 2.5 DSP LOG 工具 .............................................................................................................................. 2.5-4 第 3 章 Log 抓取 ....................................................................................................................................... 3-5 3.1 Android log .................................................................................................................................... 3.1-5 3.2 Kernel log ...................................................................................................................................... 3.2-5 3.3 Modem ARM log ........................................................................................................................... 3.3-5 3.4 通过串口 1 获取 Modem DSP log ............................................................................................... 3.4-8 3.5 通过 USB 口获取 Modem DSP log ........................................................................................... 3.5-11 第 4 章 SD 卡自动存 Log ........................................................................................................................ 4-13 4.1 如何操作 Android log 存在 SD 卡里？ .................................................................................... 4.1-13 4.2 如何操作 ARM log 存在 SD 卡里？ ........................................................................................ 4.2-13 4.3 SD 卡自动存 Android log 的相关代码介绍 .............................................................................. 4.3-13 第 5 章 其他 Log 说明 ............................................................................................................................. 5-14 5.1 如何抓取网络相关的数据业务的 log？................................................................................... 5.1-14 5.2 电话，消息，SIM 卡电话本，PIN 码相关，STK 相关等问题需要哪些 log？ ................... 5.2-14 5.3 “冻屏”“定屏”“变砖”以后怎么办？ ............................................................................. 5.3-14 、 、 5.4 如何使用脚本一次性抓取大量 LOG？ ................................................................................... 5.4-15
+
+i
+
+第1章 Spreadtrum Android LOG 简介
+Spreadtrum Android 手机分为 AP 和 Modem 两部分。其中 AP 部分运行 Android，抓取 Log 的方法和其它 Android 手机一样，在 Windows 下和 Ubuntu 下均可以抓取。而 MODEM 部分运行 spreadtrum 通信协议， 抓取 Log 的方法和 spreadtrum 的 feature 手机一样， 仅在 Windows 下可以获取。 所以，在 Spreadtrum Android 手机上调试和测试过程中可能需要获取三种 Log: Modem DSP log，Modem ARM log 和 Andorid 及 Linux kernel log。其中，Modem DSP Log 可以从 uart1 或者 USB 输出，Modem ARM Log 从 USB 口输出，而 Android 和 Kernel Log 从 USB 口输出。 另外，在 adb 没有起来之前，对于开机调试 uboot 和 kernel，可以通过 Uart1 抓取 log。开 机时 uboot 的 log 直接从 uart1 出来，而 kernel log 要从 uart1 出来，必须要修改 nvitem， NVitem?GSM_DownloadParam?log_switch_struct?DSP_log_switch: 1 代表出 DSPlog，0 代表出 kernel log。 Modem DSP Log 输出端口控制通过 nvitem 作如下修改： NVitem?nv_type?NV_REF_PARAMETER?dsp_log_set=2 NVitem?nv_type?NV_REF_PARAMETER?dsp_log_set=1 USB 方式抓取 DSP log Uart1 方式抓取 DSP log
+
+8805 上后期支持 Modem DSP Log 输出端口控制，名字为 dsp_log_mode，含义同上。
+
+.............................
+
+第2章 环境安装和工具
+2.1 USB 驱动安装 Android 手机 USB 为复合设备，包括 adb, usb mass storage, rndis, usb2serial 等。Spreadtrum 提供了 Windows 下的驱动安装文件 SCI-android-usb-driver-jungo.rar，以下为安装步骤： 1, 拔掉手机 2, 打开驱动目录 (x86 for 32bit, amd64 for 64bit), 双击 DpInst.exe. 3, 点击"next"开始安装 4, 用 USB 线连接 PC 和手机 5, 弹出"new device found"窗口后选择相应文件目录安装即可。 安装完毕在设备管理器里面会显示如下新设备：
+
+在 Windows 下如果要安装 Fastboot 驱动，其文件和这里 adb 使用的驱动文件一样。 在 Windows 下如果要安装 USB 绑定的驱动，其文件也在这个驱动文件包里。 Ubuntu 下不需要安装驱动，将正常开机的手机连接到电脑。
+2.1-2
+
+运行 lsusb 命令会显示出一个 ID 1782:5d04 Spreadtrum Communications Inc.的设备，这个就是 spreadtrum 的 adb 设备。
+
+2.2 adb 和 fastboot 工具 windows 下的 adb.exe 和 fastboot.exe 都位于 Google 发布的标准 Android SDK 包里面。 Ubuntu 下的 adb 和 fastboot 在编译完 Android 之后，可以在 out/host/linux-x86/bin 下找到。
+
+2.3 写入 USB VID 要使 adb 正常工作，要把 spreadtrum USB VID 就是 0x1782 写入相应的 adb_usb.ini 文件。 在 Windows 下： cd %USERPROFILE% md .android cd .android 创建文件 adb_usb.ini，并写入 0x1782，存盘退出。为使用正常，最好重启 Windows。 连接手机，运行 D:\Android-SDK\android-sdk-windows\tools>adb devices 命令，返回： List of devices attached 19761202 device
+
+就表明 adb 正确安装了，可以使用 adb 的命令了。 在 Ubuntu 下： cd ~ mkdir .android cd .android 创建文件 adb_usb.ini，并写入 0x1782，存盘退出。 连接手机，在 Ubuntu 下运行 adb devices 命令，返回： List of devices attached 19761202 device
+
+就表明 adb 正确安装了，可以使用 adb 的命令了。
+
+2.3-3
+
+.............................
+
+2.4 ARM LOG 工具 在配套的工具包里面，运行 Logel_for_TD_cust\bin\ArmLogelC.exe。
+
+2.5 DSP LOG 工具 在配套的工具包里面，运行 DSPLOGGER\Bin\DspLogger.exe。
+
+2.5-4
+
+第3章 Log 抓取
+3.1 Android log Spreadtrum Android 手机的 Android log 和其它任何 Android 手机一样，采用 adb logcat 来抓取 main， radio， event 等 log。在 Windows 或者 Ubuntu 机器上，命令行里输入： adb logcat –v time adb logcat –v time –b radio adb logcat –v time –b event 可以得到带时间信息的相应 log，注意要看时间值，所以加 -v time。
+
+3.2 Kernel log Spreadtrum Android 手机的 Kernel log 和其它任何 Android 手机一样，使用命令为： adb shell #cat /proc/kmsg //显示所有输出的 kernel log
+
+#cat /proc/kmsg |grep -i "abcd" //仅显示含字串"abcd"的 kernel log 行 也可使用一行命令，adb shell cat /proc/kmsg 来获取 kernel log。
+
+3.3 Modem ARM log 1. 运行 ArmLogelC.exe,点击“IP settings” 菜单或者按钮
+
+3.3-5
+
+.............................
+
+3.3-6
+
+2.
+
+选择端口 Type“Uart”, 端口 port 为“SCI Vendor U2S(DIAG)” Port, 点击 OK [如果设置 DSP log 也是从 USB 口出来，则需要使用 channel server 提供的端口，Type 要选择 Channel Server，Port 也选择 Channel Sever 的端口相同，比如 36666]
+
+3.
+
+点击 “connect with MS” 按钮
+
+4.
+
+点击“Logging” 按钮
+
+3.3-7
+
+.............................
+
+5.
+
+此时 arm log 信息会出来：
+
+3.4 通过串口 1 获取 Modem DSP log
+
+DSP log 可以通过手机串口 1 输出，也可以通过 USB 口输出。如果通过串口 1 输出，则 需经过串转 U 设备连接到 PC 的 USB 口。如果是使用 spreadtrum 提供的红盒子作串/U 转换，需要安装对应驱动。
+3.4-8
+
+1.
+
+运行运行 DSP log 工具 DspLogger.exe，点击“Settings” 按钮。
+
+2.
+
+选择正确的 UART 口, 设置波特率为 “2000000”, 然后点击“OK” 按钮。 Endian 为 Little Endian。
+
+3.
+
+点击“Connect” 按钮
+
+3.4-9
+
+.............................
+
+4.
+
+点击“Start logging test points” 按钮
+
+5.
+
+DSP log 可以接收到并显示：
+
+3.4-10
+
+3.5 通过 USB 口获取 Modem DSP log 1. 硬件连线：直接用一根 USB 线连接手机和 PC，不需要使用串转 U 或者连接红盒子。 2. Channel Server 设置 用 USB 方式输出 DSP log 必须连接 Channel Server，ChannelServer 设置如下图：
+
+1) 2) 3)
+
+Type：设置成 UART Port：根据实际情况选择，如果安装的是 Jungo 驱动，选择 SPRD U2S Diag 端口 BaudRate：设置成 460800
+3.5-11
+
+.............................
+
+4) Endian：根据手机版本选择，8805G/8810 版本为小端版本，选择 Little Endian。 5) WinSocket Server Port：保持默认的 36666 即可，如需在同一台笔记本上同时接多台手 机，则需要开多个 channel server，并且将 Port 设置成不同值
+
+3. 1) 2) 3)
+
+DSP Logger 工具设置 Socket IP address：设置成 127.0.0.1，即本机 Port：和 Channel Server 中 WinSocket Server Port 保持一致 Endian：根据手机版本选择，8805G/8810 版本为小端版本，选择 Little Endian。
+
+4. Assert 后 log 保存方法 a. 在 Armlogel 的 assert 窗口中输入 m,，其作用是：Print DSP assert info，当 DSP Assert 信息 Dump 完毕后会提示“Dump DSP Assert Information finished！ ” b. 保存 DSP log，此时除了保存下 tp 文件以外，在同一目录下还会保存 1 个.dump 文件 c. 在 assert 窗口依次输入 8-1 后，保存 Arm log
+
+3.5-12
+
+第4章 SD 卡自动存 Log
+4.1 如何操作 Android log 存在 SD 卡里？
+回答： /sdcard/logs4android/logs4android--0/目录保存了开机后android记录的所有log， 包括 logcat 和logcat –b radio的Android消息以及cat /proc/kmsg的内核信息等。如果重新开机，老的log保存在1 里面。
+
+4.2 如何操作 ARM log 存在 SD 卡里？
+T卡存ARM LOG功能已实现，可通过工程模式*#*#83781#*#*开关。 *#*#83781#*#* -> Log Settings -> Modem Arm Log -> SDCard，即可捕捉log到sd卡logs4modem目录 *#*#83781#*#* -> Log Settings -> Modem Arm Log -> PC，即可停止捕捉log到sd卡 不过在有条件的情况下，建议使用正常的PC抓Log的方式，减少Log数据不足的风险。
+
+4.3 SD 卡自动存 Android log 的相关代码介绍
+在3rdparty/tools/tools-binary/special/tools/目录中含有如下脚本 . logs4android.sdcard.umount.sh ./tools/tools-binary/special/tools/logs4android.bt.sh ./tools/tools-binary/special/tools/logs4android.bt.service.sh ./tools/tools-binary/special/tools/logs4android.sh 在3rdparty /tools/tools-binary/special/init.3rdparty.rc文件中有如下内容： service logs4android /system/bin/logwrapper /system/xbin/logs4android.sh ^^ ^eng # disabled service logs4androidbt /system/bin/logwrapper /system/xbin/logs4android.bt.service.sh ^^ ^eng disabled oneshot on property:logs4android.enable=1 start logs4android on property:logs4android.enable=0 stop logs4android 以上这些内容在编译时会复制到/system/sps/init/init.sp8805ga.3rdparty.rc文件中，在开机时调用， 直接运行。其中^^ ^eng表明仅在eng模式，就是Android 调试模式下运行。
+
+4.3-13
+
+.............................
+
+第5章 其他 Log 说明
+除了前面说到的通用的 Android logcat, Android kernel log，MODEM ARM log，MODEM DSP log 之 外，还有以下一些 log 需要注意。最后，我们在 windows 系统下开发了抓取全部 log 的 bat 文件，可 以在测试时统一使用。
+
+5.1 如何抓取网络相关的数据业务的 log？ 在 Android 侧主要使用 tcpdump 命令来抓取网络应用相关的数据业务，比如彩信，浏览器，流媒体 等应用。
+使用adb shell tcpdump命令来抓。 adb shell tcpdump -i any -p -s 0 -w /sdcard/capture.pcap 会把CAP包存在SD卡目录上。 用adb pull可以复制到电脑上。 *#*#83782#*#* -> PS related -> Log Switch -> CAP log 开启， 连接 modem arm log工具进行操作，操作完成后保存log，即可在保存的log中生成cap包。有了第一种方 法，正常情况不需要这种方法。
+
+5.2 电话，消息，SIM 卡电话本，PIN 码相关，STK 相关等问题需要哪些 log？
+这些问题都是和 MODEM 相关的，不仅在 Android 侧要抓 main 和 radio 的 log，还需要 modem 的 Log。一 次抓全可避免发过来的 Log 不全，还要频繁要求客户复现问题抓 Log。
+
+5.3 “冻屏”、“定屏”、“变砖”以后怎么办？
+如果出现“冻屏”、“定屏”状况，请观察下列信息并加入问题描述，对分析极有帮助： 1. logcat是否还在继续出，抓取下来。 adb logcat -v time > logcat_main.log adb logcat -v time -b radio> logcat_radio.log 2. kernel log (/proc/kmsg) 是否还在继续出，抓取下来。 adb shell cat /proc/kmsg > kmsg.log 3. arm/dsp log是否还在继续出。 抓取arm/dsplog 4. 看adb shell能否进入手机，观察data/anr/traces.txt文件时间是否和当前一致，抓取下来。 adb pull /data/anr/* ./anr/ adb pull /data/tombstones/* ./tombstones/ adb bugreport > bugreport.log 出现问题之前请先清掉前次测试可能遗留的log adb shell rm -rf /data/anr adb shell rm -rf /data/tombstones
+5.3-14
+
+变砖后怎么办 有时候会发现手机按任何键都没有反应，屏幕也不会刷新，通过usb连接到pc，pc也没有反应，俗称‘砖 头’的情况， 可能是kernel发生了panic。 现在加入了一个机制，可以将panic时的message存储到flash上，下次开机可以获取出来。方法： 发生panic后， 重新开机： 1. adb pull /data/dontpanic/apanic_console 2. adb pull /data/dontpanic/apanic_threads 以上两个文件如果发生了panic，就会有log存储下来。 3. adb pull /proc/last_kmsg (这个不一定有，只有在reboot的情况下才会有这个文件)
+
+5.4 如何使用脚本一次性抓取大量 LOG？
+我们开发出windows版本下的两个bat脚本LogAndroid2PC.bat和StopLogging.bat，目前版本1.3.4。
+
+能帮助我们一次性抓取所有的log。能抓取的LOG包括logcat_main.log，logcat_radio.log，kmsg.log， /sdcard/capture.pcap，hcidump.log以及/sdcard/logs4android/，/data/anr/，/data/tombstones， /data/watchdog，/data/crush，/sdcard/capture.pcap，gsnap snapshot.png /dev/graphics/fb0， /data/dontpanic/apanic_console，/data/dontpanic/apanic_threads，/proc/last_kmsg， bugreport.log等各种信息，这对分析某些疑难杂症提供了尽量多的信息。 共有两种测试方法 测试过程连接PC：请在测试前双击LogAndroid2PC，测试完成/出现问题后双击StopLogging。 测试过程不连接PC：请在测试完成/出现问题后，先用USB线将测试机连到PC，再双击StopLogging。 注意： 1，请将两个脚本放在同一目录下 2，获取的log会自动保存在脚本所在目录下新建的以androidlog_<当前时间>命名的目录中（如 androidlog_20110922112211） 3，如执行StopLogging时提示测试设备无法连接，请按照屏幕提示完成后续操作 4，如果采用"测试过程不连接PC"的方式获取log，请确保先插入USB线再执行StopLogging脚本，否则脚 本可能识别为设备已无法连接 5，采用"测试过程连接PC"方式后，如要改用"测试过程不连接PC"方式测试，需重启手机或手动重新启动 logs4android服务 6，如需做蓝牙相关测试，请先使能蓝牙设备，再启动LogAndroid2PC.bat（否则hcidump.log中不会有有 效信息）
+
+5.4-15

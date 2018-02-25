@@ -1,0 +1,647 @@
+Spreadtrum Android 8810
+
+www.spreadtrum.com
+
+Spreadtrum Android ------文件编译流程 v1.0.0
+TD Div
+
+上海·北京· 深圳· 圣迭戈· 韩国· 印度 人力资源部－培训发展组
+
+.1
+
+Innovation changes the future
+
+课程名称： Spreadtrum Android 文件编译流程 课程类别：通用课程
+课程目标： 1，了解8810G的源代码结构。 2，了解8810G的U-boot，Kernel，Android的编译过程。
+
+www.spreadtrum.com
+
+2
+
+主要内容
+
+Innovation changes the future
+
+Download Files
+
+./mk
+
+./build.sh
+
+make
+
+Uboot, kernel and Android
+
+www.spreadtrum.com
+
+3
+
+Download Files
+FDL fdl1.bin fdl2.bin Bootloader u-boot-spl-16k.bin u-boot.bin Logo vm Logo.bmp Vmjaluna.img MODEM Modem.bin DSP.bin Nvitem.bin
+
+Innovation changes the future
+
+Android Boot.img System.img Userdata.img
+
+1，FDL1 ：初始化SDRAM，与PC通信下载FDL2到SDRAM，并运行FDL2。 2，FDL2 ：初始化NAND控制器，与PC通信下载其他Image到NAND flash。 [客户可自行编译， 一般情况下无需改变] 3，u-boot-spl-16k.bin：第一级bootloader，在IRAM执行，初始化CPU，SDRAM等，引导 UBOOT分区到SDRAM中。 [客户可自行编译，一般情况下无需改变] 4，u-boot.bin： 真正的bootloader，初始化部分设备，负责将虚拟机，ThreadX分区，Linux分 区从NAND注入SDRAM。 [客户可自行编译，关注LCD，Key以及其它的一些改变] 5，vmjaluna.img: 虚拟机执行代码。管理和调度两个OS。
+
+6，Modem.bin: ThreadX执行代码，Modem通信协议的实现。 7，DSP_DM_G2.bin: Modem的DSP代码实现。 8，nvitem.bin：Fixed NV数据，射频，网络等信息。 [客户可使用Nveditor工具生成bin，主要关 注RF数据的变化] ------要注意不同射频器件对应的不同的DSP和Nvitem文件。 9，boot.img：Cmdline + Linux Kernel + Ramdisk。 [客户可自行编译，关注外设驱动的变化] 10，System.img: Android代码。 [客户可自行编译，关注装载驱动模块，HAL，frameworks， Application的变化] 11，Userdata.img: Android数据。[客户可自行编译，关注初始数据]
+www.spreadtrum.com 4
+
+代码架构—IDH压缩包
+
+Innovation changes the future
+
+Base：主文件包，包括u-boot[FDL2，SPL，uboot]，kernel[boot.img]和Android[system.img,userdata.img] Csr：含有csr的BT，GPS，WIFI的code, 解压缩后复制到3rdparty对应目录。 Inno：含有inno的CMMB的code , 解压缩后复制到3rdparty对应目录。
+
+www.spreadtrum.com
+
+5
+
+代码架构—base包结构
+
+Innovation changes the future
+
+apuser@xqianubt:~/source/8810$ cat mk #!/usr/bin/perl –w require "customize/perl/main.pl";
+
+www.spreadtrum.com
+
+6
+
+代码架构—csr和inno包结构
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+7
+
+customize代码架构
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+8
+
+customize代码架构
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+9
+
+3rdparty代码架构
+
+Innovation changes the future
+
+Drivers Applications Tools Uboot build script
+
+www.spreadtrum.com
+
+10
+
+mk的使用
+Options: -o, -opt=arguement -h, -help -lp, -listp -ck, -chk-env
+
+Innovation changes the future
+
+Example: (1) Clean and compile.: : Pass arguments to make. ./mk sp8810ga n : Print this message and exit. (2) Re-compile target: : List all available projects. ./mk sp8810ga u : check build environment. (3) Clean the objects: ./mk sp8810ga c Projects: (4) Build kenrel: one of available projects. ./mk sp8810ga u k (5) Build uboot: Actions: ./mk sp8810ga u ub n, new : Clean and compile. (6) Build kenrel and uboot: (11) Build ramdisk img: c, clean : Clean the objects. ./mk sp8800ga u k ub ./mk sp8810ga u ramdisk u, update : Re-compile target. (7) Check building environmet: (12) Build recovery img: pac, packet : packet dedicated folder ./mk -ck ./mk sp8810ga u recovery pb,prebuild : Gen some files for customization. (8) List all available projects: (13) Packet system img: ig, idhgen : Gen idh code release package(used internally) ./mk -lp ./mk sp8810ga pac system igb,idhgenb : Gen idh lib release package(used internally) (9) Update api: (14) Packet userdata img: ua,update-api : The update-api process. ./mk sp8810ga ua ./mk sp8810ga pac userdata mc,menuconfig : make menuconfig (10) Pre Build: (15) Make menuconfig : ./mk sp8810ga pb ./mk sp8810ga mc Modules: (16) generate idh lib(only for internal use): ub, uboot : Build for uboot. ./mk sp8810ga igb k, kernel, bootimage : Build for kernel. (17) Build under usr mode(default eng mode): adr, android : Build for android. ./mk -o=usr sp8810ga n adr <module name> : Build for android module (18) Build aunder 1sim mode: userdata : Build for userdata img. ./mk -o=1sim sp8810ga n ramdisk : Build for ramdisk (19) Build under usr&1sim mode: recovery : Build for recovery image. ./mk -o=usr:1sim sp8810ga n userdata : packet userdata folder (20) After compile not clean link files(default clean): system : packet system folder ./mk -o=nsc sp8810ga n (21) Build android module under path xxx/xxx: ./mk sp8810ga u adr xxx/xxx (22) Build kernel ko under path 3rdparty/xxx: ./mk sp8810ga u ko 3rdparty/xxx (23) Clean ko objs: ./mk sp8810ga c ko 3rdparty/xxx
+
+www.spreadtrum.com
+
+11
+
+perl下各个文件的作用
+
+Innovation changes the future
+
+1. chenv.pl : 用来检查客户编译环境。 2. cleanall.pl : 用来恢复至客户编译前环境。 3. filebk.pl : 用来在客户化代码生成过程中备份必要文件。 4. fileR.pl : 用来在cleanall时恢复备份文件。 5. linksp.pl : 用来在3rdparty文件夹下相应模块和Customize文件夹下相应模块建立链接。 后续在3rdparty完成历史使命后，此文件也就失去作用。 6. listP.pl : 用来列出所有在customize/make文件夹下客户工程。 7. main.pl : 用来对客户输入编译命令行解析。 8. mk : 此文件同时也会存在与客户工程根目录下，是所有编译动作的最初调用脚本。 9. prebuild.pl : 此文件会根据customize/make中客户化配置文件在kernel/frameworks 等目录下产生客户化配置代码，同时也会自动修改或生成相对应MAKEFILE。 10. route.pl : 用来对route.mk进行解析。与route.mk同目录的文件会按照解析出的文件路 径链接至目标文件夹。 11.record.pl ：记录CLEAN 动作时需要删除的文件夹和链接。 12. kcfg.pl : 此文件用来控制kernel客户化配置文件生成。 13. appcfg.pl ：此文件用来控制app客户化配置文件生成。 14. ckcollision.pl:检查文件是否冲突，如果有生成冲突文件列表（冲突场景：不同路径下同一 文件链接至同一目标文件） 15. sprd.pm : 各脚本通用函数列表。
+
+www.spreadtrum.com
+
+12
+
+./mk sp8810ga new 流程1
+Customize/perl/mail.pl
+
+Innovation changes the future
+
+?
+?
+
+1，parse customer input
+2，parse customer configure makefile
+
+取得输入参数项目$project = lc($ARGV[0]);[即sp8810ga], 和$action = lc($ARGV[0]);[即n], @input_module = @ARGV; 解析用户配置文件customize/make/ sp8810ga.mak
+# SPRD Build System BUILD_SPRD_PLATFORM = sc8810 BUILD_KERNE_MACHINE = CONFIG_MACH_SP8810 BUILD_KERNEL_VERSION = kernel BUILD_UBOOT_VERSION = u-boot # Customize for customer driver(configured according to your need) 3RDPARTY_BLUETOOTH = BC6888 3RDPARTY_CAMERA = ov5640:ov2655:ov7675:ov2640:gc0309:nmi601 3RDPARTY_LCD = hx8369 3RDPARTY_GSENSOR = lis3dh 3RDPARTY_MSENSOR = akm8975 3RDPARTY_LSENSOR = AL3006 3RDPARTY_GPS = gsd4t 3RDPARTY_TP = PIXCIR 3RDPARTY_WIFI = UNIFI6030 3RDPARTY_FM = kt0812G 3RDPARTY_APP = app8810 3RDPARTY_ANIM = poweranim # SPRD COMMON MODULE(dedicated!!!.should not change) 3RDPARTY_TOOLS = iperf-2.0.4:wireless_tools.29:tools-binary:testjar 3RDPARTY_HEADSET = headset-soc 3RDPARTY_AUDIO = snd_dummy_alsa_audio 3RDPARTY_MEDIASERVER = mediaserver_listener 3RDPARTY_FIREWALL= yeezone 3RDPARTY_UBOOT = uboot 3RDPARTY_CMMB = IF238 3RDPARTY_CMCC = CMCC 3RDPARTY_GPU = mali # SPRD APP FEATUR CONTROL(configured according to your need) #SPRD_APP_USE_TASKMANAGER = no ?frameworks/base/core/java/android/util/SprdFeatureUtils.java frameworks/base/include/utils/SprdFeatureUtils.h
+
+www.spreadtrum.com
+
+13
+
+./mk sp8810ga new 流程2
+Customize/perl/mail.pl
+
+Innovation changes the future
+
+?
+
+3，verify the validity of customer input action then convey customer input action to standard action
+
+验证输入动作并转换为标准动作 @acts = split(",", $action); $result = &act_convey(\@acts, \@cust_act); ? ($uAct = "new") if($uAct eq "n");
+
+?
+
+4，verify the validity of customer input module
+
+验证输入模块 ($uMod = "uboot") if ($uMod eq "ub"); ($uMod = "bootimage") if (($uMod eq "k") or ($uMod eq"kernel")); ($uMod = "android") if ($uMod eq "adr");
+
+?
+
+5，generate make.ini
+
+获得make.ini，如果是action=new的话 创建make.ini 然后read。 gen_makeini(\@acts); 创建的make.ini文件内容： project = sp8810ga mode = sim =
+
+?
+
+6，pre compile condition prepare
+
+编译前条件准备，生成mOpts数组，若是new则rm -rf $build_folder push(@mOpts, "ENABLE_LOG=$log"); push(@mOpts, "PROJECT=$project"); push(@mOpts, "ROOTDIR=$enterdir"); push(@mOpts, "CUR_SIM=$sim"); push(@mOpts, "CUR_MODE=$mode"); push(@mOpts, "KERNEL_VER=$kernel_ver"); push(@mOpts, "UBOOT_VER=$uboot_ver"); push(@mOpts, "IDH_PARAM=$idhparam");
+
+www.spreadtrum.com
+
+14
+
+./mk sp8810ga new 流程3
+Customize/perl/mail.pl
+
+Innovation changes the future
+
+?
+
+7，call makefile compile according to customer input
+
+$cmdArg = “CMD_ARGU=\”@mOpts\“”; // cmdArg复制了一份mOpts $makeCmd = "make -f customize/make/makefile.sprd $cmdArg @mOpts“; &system_call(“touch $logdir/${project}_prebuild.log”); //建立out/target/product/sp8810ga/log/sp8810ga_prebuild.log &system_call("perl customize/perl/prebuild.pl customize/make/${project}.mak 2>&1 | tee $logdir/${project}_prebuild.log"); &system_call("$makeCmd prebuild CUR_ACTION=prebuild"); &system_call("touch $logdir/${project}_${uAct}.log"); //建立out/target/product/sp8810ga/log/sp8810ga_new.log &system_call("$makeCmd ${uAct} CUR_ACTION=${uAct}"); &system_call("perl customize/perl/cleanall.pl $project $platform"); 分解： A. perl customize/perl/prebuild.pl customize/make/sp8810ga.mak 调用prebuild.pl，执行18步动作： step[1]: Judge some error conditions step[2]: parse customize/make/rules.mak step[3]: according to customize/make/sp8810ga.mak generate hash table step[4]: clean softlink and hardlink, recover all the backup files to native folder,delete backup folder step[5]: generate customer app feature control files step[6]: generate customer kernel cfg files step[7]: auto sync customize modules with 3rdparty modules step[8]: judge whether kernel cfg src folder and dst folder are exist step[9]: generate softlink between customer_cfg kernel folder and kernel cfg folder step[10]: generate kernel cfg top folder makefiles step[11]: generate kernel cfg sub folder makefiles step[12]: generate softlink between 3rdparty module kernel folder and kernel driver folder step[13]: generate softlink between customer cfg hal files and dst hal files step[14]: generate hal/framework/specail softlink and makefile generate softlink between hal/hardware/framework src folder and dstfolder step[15]: generate uboot softlink and makefile step[16]: generate engineering softlink and makefile step[17]: generate special module softlink and chiplist step[18]: generate dummy Android.mk
+
+www.spreadtrum.com
+
+15
+
+./mk sp8810ga new 流程4
+
+Innovation changes the future
+
+B. make -f customize/make/makefile.sprd CMD_ARGU="ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=" ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=prebuild CUR_ACTION=prebuild 调用makefile.sprd中prebuild： ($(BUILD_MODE) ./build.products.sh sp8810ga prebuild $(DEAL_STDOUT_ACTION)) 即，kver=kernel uver=u-boot dc=y jobs=1 ./build.products.sh sp8810ga prebuild $(DEAL_STDOUT_ACTION)) [prebuild [dirname] -- 编译android工程时脚本会将第3方chip的修改动态patch到android工程中] ./build.products.sh sp8810ga prebuild ? android_3rdparty_kernel_build: Build kernel Image/zImage and kernel modules first, C. make -f customize/make/makefile.sprd CMD_ARGU="ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=" ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=new CUR_ACTION=new 调用makefile.sprd中new： ($(BUILD_MODE) ./build.products.sh $(PROJECT) $(SIM_OPT) fprebuild) $(DEAL_STDOUT_ACTION) 即， kver=kernel uver=u-boot dc=y jobs=1 ./build.products.sh sp8810ga $(SIM_OPT) fprebuild $(DEAL_STDOUT_ACTION)) [fprebuild -- 快速build需要的前提配置自动设置,同时完成一次彻底编译(建议使用)] ./build.products.sh sp8810ga fprebuild ? android_3rdparty_kernel_build: Build kernel Image/zImage and kernel modules second, ? sprd_build_3rdparty_all_chips: build u-boot and others 3rdparty ko, ? ?sprd_3rdparty_make_android: make update-api, make PRODUCT-sprdroid_base-eng -j1 D. perl customize/perl/cleanall.pl sp8810ga sc8810 调用cleanall.pl，主要动作包含： erase all customize/customer_drv special module related softlink files recover all the backup files erase all project related dir include sub dir and files
+
+www.spreadtrum.com
+
+16
+
+./mk sp8810ga clean 流程
+Customize/perl/mail.pl 前面6步同 mk sp8810ga new，第7步:
+
+Innovation changes the future
+
+?
+
+7，call makefile compile according to customer input
+
+$cmdArg = “CMD_ARGU=\”@mOpts\“”; // cmdArg复制了一份mOpts $makeCmd = "make -f customize/make/makefile.sprd $cmdArg @mOpts“; &system_call("$makeCmd ${uAct} CUR_ACTION=${uAct}"); &system_call(“perl customize/perl/cleanall.pl $project $platform”); //同new中内容 &system_call("rm -rf $build_folder");
+
+分解： A. make -f customize/make/makefile.sprd CMD_ARGU="ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=" ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=clean CUR_ACTION=clean 调用makefile.sprd中clean： $(BUILD_MODE) ./build.products.sh $(PROJECT) clean 即， kver=kernel uver=u-boot dc=y jobs=1 ./build.products.sh sp8810ga clean [clean -- 清除第3方对android的所有修改,恢复到原始的android版本,可以认为是unpatch.] B. rm -rf $build_folder rm -rf out/target/product/sp8810ga,此目录仅含一些log Clean后不带参数。
+
+www.spreadtrum.com
+
+17
+
+./mk sp8810ga prebuild流程
+Customize/perl/mail.pl 前面6步同 mk sp8810ga new，第7步:
+
+Innovation changes the future
+
+?
+
+7，call makefile compile according to customer input
+
+&system_call("touch $logdir/${project}_prebuild.log"); //建立out/target/product/sp8810ga/log/sp8810ga_prebuild.log &system_call("perl customize/perl/prebuild.pl customize/make/${project}.mak 2>&1 | tee $logdir/${project}_prebuild.log"); &system_call("$makeCmd ${uAct} CUR_ACTION=${uAct}");
+
+分解： A. make -f customize/make/makefile.sprd CMD_ARGU="ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=" ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=prebuild CUR_ACTION=prebuild 调用makefile.sprd中prebuild： ($(BUILD_MODE) ./build.products.sh $(PROJECT) prebuild $(DEAL_STDOUT_ACTION)) 即， kver=kernel uver=u-boot dc=y jobs=1 ./build.products.sh sp8810ga prebuild $(DEAL_STDOUT_ACTION)) [prebuild [dirname] -- 编译android工程时脚本会将第3方chip的修改动态patch到android工程中]
+
+www.spreadtrum.com
+
+18
+
+./mk sp8810ga update流程
+Customize/perl/mail.pl 前面6步同 mk sp8810ga new，第7步:
+
+Innovation changes the future
+
+?
+
+7，call makefile compile according to customer input
+
+&system_call("touch $logdir/${project}_prebuild.log"); //建立out/target/product/sp8810ga/log/sp8810ga_prebuild.log &system_call("perl customize/perl/prebuild.pl customize/make/${project}.mak 2>&1 | tee $logdir/${project}_prebuild.log"); &system_call("touch $logdir/${project}_${uAct}.log"); //建立out/target/product/sp8810ga/log/sp8810ga_update.log &system_call("$makeCmd ${uAct} CUR_ACTION=${uAct}"); &system_call("perl customize/perl/cleanall.pl $project $platform"); //同new中内容 分解： A. make -f customize/make/makefile.sprd CMD_ARGU="ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=" ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=update CUR_ACTION=update 调用makefile.sprd中update： ($(BUILD_MODE) ./build.products.sh $(PROJECT) $(SIM_OPT) fbuild2) $(DEAL_STDOUT_ACTION) 即， kver=kernel uver=u-boot dc=y jobs=1 ./build.products.sh sp8810ga fbuild2 $(DEAL_STDOUT_ACTION)) [fbuild2 -- 快速build,在fbuild基础上,再额外编译3rdparty下的文件(建议使用)] ./build.products.sh sp8810ga fbuild2 ? android_3rdparty_kernel_build: Build kernel Image/zImage and kernel modules second, ? sprd_build_3rdparty_all_chips: build u-boot and others 3rdparty ko, ? ?sprd_3rdparty_make_android: make PRODUCT-sprdroid_base-eng -j1 单独update可以生成 kernel Image, u-boot.bin， u-boot-spl-16k.bin ，fdl2.bin，3rdparty ko，system.img, userdata.img, boot.img
+
+www.spreadtrum.com
+
+19
+
+./mk sp8810ga update uboot流程
+Customize/perl/mail.pl 前面6步同 mk sp8810ga new，第7步:
+
+Innovation changes the future
+
+?
+
+7，call makefile compile according to customer input
+
+&system_call("touch $logdir/${project}_${uAct}.log"); //建立out/target/product/sp8810ga/log/sp8810ga_uboot.log &system_call("$makeCmd $uMod CUR_ACTION=$uAct CUR_MODULE=$uMod"); &system_call("perl customize/perl/cleanall.pl $project $platform"); //同new中内容
+
+分解： A. make -f customize/make/makefile.sprd CMD_ARGU="ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=" ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=uboot CUR_ACTION=update CUR_MODULE=uboot 调用makefile.sprd中uboot： ($(BUILD_MODE) ./build.products.sh $(PROJECT) lbuild $(CUR_MODULE) $(CUR_ACTION)) $(DEAL_STDOUT_MODULE) 即， kver=kernel uver=u-boot dc=y jobs=1./build.products.sh sp8810ga lbuild uboot update $(DEAL_STDOUT_MODULE) [lbuild [dirname] [clean] -- 调用第3方build.sh脚本中的function my_local_build函数(主要用来编译ko)] 生成文件： /home/apuser/source/1206/idh.code/u-boot/u-boot.bin /home/apuser/source/1206/idh.code/u-boot/nand_spl/u-boot-spl-16k.bin /home/apuser/source/1206/idh.code/u-boot/nand_fdl/fdl2.bin
+
+www.spreadtrum.com
+
+20
+
+./mk sp8810ga update kernel流程
+Customize/perl/mail.pl 前面6步同 mk sp8810ga new，第7步:
+
+Innovation changes the future
+
+?
+
+7，call makefile compile according to customer input
+
+&system_call("touch $logdir/${project}_${uAct}.log"); //建立out/target/product/sp8810ga/log/sp8810ga_bootimage.log &system_call("$makeCmd $uMod CUR_ACTION=$uAct CUR_MODULE=$uMod"); &system_call("perl customize/perl/cleanall.pl $project $platform"); //同new中内容
+
+分解： A. make -f customize/make/makefile.sprd CMD_ARGU="ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=" ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=bootimage CUR_ACTION=update CUR_MODULE=bootimage 调用makefile.sprd中bootimage： ($(BUILD_MODE) ./build.products.sh $(PROJECT) $(CUR_MODULE)) $(DEAL_STDOUT_MODULE) kver=kernel uver=u-boot dc=y jobs=1 ./build.products.sh sp8810ga bootimage $(DEAL_STDOUT_MODULE) [bootimage -- 生成boot.img内核文件] 生成文件： out/target/product/hsdroid/boot.img
+
+可以 同时更新两个目标 ./mk sp8810ga update uboot kernel
+www.spreadtrum.com 21
+
+./mk sp8810ga update ko 3rdparty/xxx/yyy流程
+前面6步同 mk sp8810ga new，第7步:
+
+Innovation changes the future
+
+?
+
+7，call makefile compile according to customer input
+
+&system_call("touch $logdir/${project}_${uAct}.log"); //建立out/target/product/sp8810ga/log/sp8810ga_ko.log &system_call("$makeCmd $uMod CUR_ACTION=$uAct CUR_MODULE=$uMod KMOD_PATH=$CUR_MODULE_PATH"); &system_call("perl customize/perl/cleanall.pl $project $platform"); //同new中内容 分解： A. make -f customize/make/makefile.sprd CMD_ARGU="ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=" ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=ko CUR_ACTION=update CUR_MODULE=ko KMOD_PATH=/home/apuser/source/1206/idh.code/3rdparty/lsensor/AL3006 调用makefile.sprd中ko： ($(BUILD_MODE) ./build.products.sh $(PROJECT) lbuild $(KMOD_PATH) modules) $(DEAL_STDOUT_MODULE) 即， kver=kernel uver=u-boot dc=y jobs=1./build.products.sh sp8810ga lbuild /home/apuser/source/1206/idh.code/3rdparty/lsensor/AL3006 modules $(DEAL_STDOUT_MODULE) [lbuild [dirname] [clean] -- 调用第3方build.sh脚本中的function my_local_build函数(主要用来编译ko)] 可生成模块 LD [M] /home/apuser/source/1206/idh.code/3rdparty/gsensor/lis3dh/special/driver/lis3dh_acc.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/msensor/akm8975/special/driver/akm8975.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/audio/snd_dummy_alsa_audio/special/driver/snd_dummy.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/headset/headset-soc/special/driver/headset.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/fm/kt0812G/special/driver/kt0812g_fm_ctrl.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/tp/PIXCIR/special/driver/pixcir_i2c_ts.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/gpu/mali/special/ump/ump.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/gpu/mali/special/mali/mali.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/lsensor/AL3006/special/driver/al3006_pls.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/gps/gsd4t/special/driver/gpsctl.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/cmmb/IF238/special/driver/core/inno_core.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/cmmb/IF238/special/driver/lgx/inno_lgx.ko LD [M] /home/apuser/source/1206/idh.code/3rdparty/cmmb/IF238/special/driver/plat/inno_plat.ko www.spreadtrum.com LD [M] 3rdparty/wifi/UNIFI6030/special/synergy/modules/wifi_softmac/host/os_linux/driver/unifi_sdio.ko
+
+22
+
+./mk sp8810ga update android xxx/yyy/zzz流程
+Customize/perl/mail.pl 前面6步同 mk sp8810ga new，第7步:
+
+Innovation changes the future
+
+?
+
+7，call makefile compile according to customer input
+
+&system_call("touch $logdir/${project}_${uAct}.log"); //建立out/target/product/sp8810ga/log/sp8810ga_android.log &system_call("$makeCmd $uMod CUR_ACTION=$uAct CUR_MODULE=$uMod KMOD_PATH=$CUR_MODULE_PATH"); &system_call("perl customize/perl/cleanall.pl $project $platform"); //同new中内容
+
+分解： A. make -f customize/make/makefile.sprd CMD_ARGU="ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=" ENABLE_LOG=TRUE PROJECT=sp8810ga ROOTDIR=/home/apuser/source/1206/idh.code CUR_SIM= CUR_MODE= KERNEL_VER=kernel UBOOT_VER=u-boot IDH_PARAM=android CUR_ACTION=update CUR_MODULE=android KMOD_PATH=/home/apuser/source/1206/idh.code/packages/apps/Phone 调用makefile.sprd中ko： ($(BUILD_MODE) ./make_android.sh $(KMOD_PATH)) $(DEAL_STDOUT_MODULE) 即， kver=kernel uver=u-boot dc=y jobs=1 ./make_android.sh xxx/xxx $(DEAL_STDOUT_MODULE) 编模块的路径： Android目录开始一直到包含Android.mk的那个目录， ./mk sp8810ga update android packages/apps/Phone/ ?out/target/product/hsdroid/system/app/Phone.apk, out/target/product/hsdroid/data/app/PhoneAppTests.apk ./mk sp8810ga update android frameworks/base/ ?out/target/product/hsdroid/system/framework/framework.jar ./mk sp8810ga update android external/sprd/nvitemd ?out/target/product/hsdroid/system/bin/nvitemd ./mk sp8810ga update android frameworks/base/services/audioflinger/ ?out/target/product/hsdroid/system/lib/libaudioflinger.so ./mk sp8810ga update android hardware/sprd/hsdroid/libsensors/ ?out/target/product/hsdroid/system/lib/hw/sensors.sprdbp.so [由于脚本问题，某些早期版本得到的so是来自于二进制库]
+
+www.spreadtrum.com
+
+23
+
+./build.products.sh help
+
+Innovation changes the future
+
+apuser@xqianubt:~/source/1206/idh.code/customize/shell$ ./build.products.sh –h ============================== [ products list ] ============================== 00). openphone-sc8810 01). Sp8810ga Example: *1* ./build.products.sh sp8810ga 2 jobs=16 ./build.products.sh sp8810ga 3 ./build.products.sh sp8810ga [subcmd] 4 TARGET_BUILD_VARIANT=user DISABLE_DEXPREOPT=true ./build.products.sh sp8810ga [create user mode images] 5 dc=y ./build.products.sh sp8810ga [delete .config before compile kernel] 6 dc=n ./build.products.sh sp8810ga [not delete .config before compile kernel] 7 ./build.products.sh -h [for help]
+
+www.spreadtrum.com
+
+24
+
+./build.products.sh help 2
+
+Innovation changes the future
+
+apuser@xqianubt:~/source/1206/idh.code/customize/shell$ ./build.products.sh –h ++++++++++++++++++++++++++ subcmd list ++++++++++++++++++++++++++ prebuild [dirname] -- 编译android工程时脚本会将第3方chip的修改动态patch到android工程中 prebuild2 -- 快速建立android标准环境,执行之后,即可用make -j4标准方法编译android lbuild [dirname] [clean] -- 调用第3方build.sh脚本中的function my_local_build函数(主要用来编译ko) nbuild -- 只编译标准android fprebuild -- 快速build需要的前提配置自动设置,同时完成一次彻底编译(建议使用) fbuild -- 快速build,不编译3rdparty下的ko(一旦repo sync,务必重新执行fprebuild) fbuild2 -- 快速build,在fbuild基础上,再额外编译3rdparty下的文件(建议使用) clean -- 清除第3方对android的所有修改,恢复到原始的android版本,可以认为是unpatch. diff [dirname] -- 比较第3方代码和android标准代码的差异,即生成patch diff2 [dirname] -- 用beyondcompare比较第3方代码和android标准代码的差异 install [dirname] -- 将第3方编译结果安装到out/target/product/xxxx/system/sps*目录 install2 [outdir ] -- 将product产品编译结果安装到outdir目录(用来在批量编译产品时完成自动拷贝) ramdisk -- 编译product产品对应的ramdisk.img,将init.3rdparty.rc修改内容添加到ramdisk.img recovery -- 编译product产品对应的ramdisk-recovery.img和recovery.img system -- 重新打包system文件夹生成system.img userdata -- 重新打包data文件夹生成userdata.img bootimage -- 生成boot.img和linux.bin内核文件 bootimage2 -- 先删除.config,然后编译整个内核,最后生成boot.img和linux.bin内核文件 update_image -- 发布boot.img,linux.bin,ramdisk.img,system,system.img和userdata.img等文件 sdk -- 编译sdk fork new_board -- 基于本平台fork一个名为new_board的新产品到3rdparty/products/new_board目录 idhb -- 拷贝IDH专用binary Idh -- 生成IDH或用-p打patch, xxx代表具体厂商
+
+www.spreadtrum.com
+
+25
+
+./build.products.sh Analysis
+
+Innovation changes the future
+
+customize/shell/build.products.sh step1, source ./build.3rdparty.common.sh step2,[ $do_build ] && { $ANDROID_3RDPARTY_PRODUCTS_PATH/$selected_product/res/build.sh $subcmd
+${ll_args[@]}; }
+chip_path="/mediaserver/mediaserver_listener /lsensor/AL3006 /cmcc/CMCC /cmmb/IF238 /uboot/uboot /wifi/UNIFI6030 /firewall/yeezone /gsensor/lis3dh /msensor/akm8975 /bluetooth/BC6888 /gps/gsd4t /audio/snd_dummy_alsa_audio /headset/headset-soc /fm/kt0812G /tp/PIXCIR /tools/iperf-2.0.4 /tools/wireless_tools.29 /tools/tools-binary /tools/testjar /anim/poweranim /gpu/mali
+
+customize/customer_cfg/sp8810ga/res/build.sh
+step1, echo "SH_INFO:chip_path($chip_path)" >&2 step2, source ${ANDROID_CUSTOMIZE_BASE}/shell/build.3rdparty.common.sh step3, $(product_copy "${PRODUCT_COPY_FILES}" $@) step4, source ${ANDROID_CUSTOMIZE_BASE}/shell/build.3rdparty.common.sh step5, $(sprd_build_3rdparty_all_chips "${CHIP_PATH_LISTS}" "${CHIP_PATH_LISTS_EXT}" $@) ?$(sprd_build_3rdparty $args0 $args1 $args2 $args3 $args4 $args5) ?$(sprd_3rdparty_make_android ${ANDROID_3RDPARTY_TARGET_PRODUCT} ${ANDROID_3RDPARTY_TARGET_BUILD_VARIANT} $@)
+
+customize/shell/build. 3rdparty.common.sh step1, set all kinds of variables, including step2, $(android_3rdparty_kernel_build) # build kernel first if needed step3, Implement all kinds of functions headed sprd_3rdparty_*, which will be called if need.
+www.spreadtrum.com 26
+
+./build.3rdparty.common.sh Analysis
+customize/shell/build. 3rdparty.common.sh function sprd_build_3rdparty_all_chips()
+
+Innovation changes the future
+
+“ idhb”: do_idhb_release ${args[@]} >&2 “idh” : do_idh_release ${args[@]} >&2 “clean”: $(sprd_android_clean)；sprd_hotcopy_clean ；sprd_product_clean … "fbuild“, "prebuild2“, "fbuild2“: $(android_3rdparty_kernel_build_common) "fbuild“, "fbuild2“, "nbuild“: ${ANDROID_3RDPARTY_BASE}/${CHIPNAMEPATH}/special/build.sh fbuild_clean $num #1. add chip "all“,"3“,"prebuild“,"prebuild2“: $(sprd_3rdparty_add, $(my_local_copy), ${CHIPNAMEPATH}/special/build.sh prebuild $num "bootimage“: ANDROID_3RDPARTY_CMD=bootimage, $(sprd_prebuild_3rdparty) #2. local build to generate chip self ko driver "all“,"3“,"lbuild“,"prebuild2“,"fbuild2“: $(my_local_build $margs1), /${CHIPNAMEPATH}/special/build.sh lbuild $margs1 #3. build all added chip "${is_build_android}“,"fbuild“,"fbuild2“,"prebuild2“,"fprebuild2“: $(sprd_build_3rdparty $args0 $args1 $args2 $args3 $args4 $args5) #4. copy chip related file "all,"3,"install,"install2,"fbuild,"fbuild2”: $(my_local_install), ${ANDROID_3RDPARTY_BASE}/${CHIPNAMEPATH}/special/build.sh install "install“:out/host/linux-x86/bin/mkyaffs2image -f ${ANDROID_OUT}/system ${ANDROID_3RDPARTY_ANDROID_OUT}/system.img out/host/linux-x86/bin/mkyaffs2image -f ${ANDROID_OUT}/data ${ANDROID_3RDPARTY_ANDROID_OUT}/userdata.img $(sprd_3rdparty_make_bootimage) #5. clean “fbuild“,"fbuild2”: ANDROID_3RDPARTY_CMD=clean, $(sprd_build_3rdparty) #6. normal build android "all“,"normal" : ANDROID_3RDPARTY_CMD=nbuild, $(sprd_build_3rdparty) #7. copy normal related files "all“, "normal“,"install2“: ${ANDROID_3RDPARTY_BASE}/${CHIPNAMEPATH}/special/build.sh install2 "ramdisk" : $(sprd_3rdparty_make_ramdisk "recovery“: $(sprd_3rdparty_make_recovery "system" :$(sprd_3rdparty_make_system "userdata“ : $(sprd_3rdparty_make_userdata "bootimage“, "bootimage2“: $(sprd_3rdparty_make_bootimage $args0 $args1 $args2 $args3 $args4 $args5) www.spreadtrum.com
+
+27
+
+./build.3rdparty.common.sh Analysis
+customize/shell/build. 3rdparty.common.sh function sprd_build_3rdparty()
+"${ANDROID_3RDPARTY_CMD" # a. update_image "update_image" ] && $(sprd_3rdparty_update_image $1) # -. Diff "diff“: $(sprd_3rdparty_diff ${MYCHIP_BASE}) "diff2" : $(sprd_3rdparty_diff ${MYCHIP_BASE} 2) # 0. preclean "ramdisk“, "bootimage" : $(sprd_clean_3rdparty)
+
+Innovation changes the future
+
+# 1. prebuild $(sprd_prebuild_3rdparty),
+
+[ ${?} -eq 1 ] && export ANDROID_3RDPARTY_BUILD_RAMDISK=y
+
+# 2. build & clean "build" ,"lbuild" , "nbuild“ ,"fbuild“ ,"fbuild2" ,"prebuild2" ,"fprebuild2" : $(sprd_3rdparty_make_android ${ANDROID_3RDPARTY_TARGET_PRODUCT} ${ANDROID_3RDPARTY_TARGET_BUILD_VARIANT} $@) # 3. install "install" : $(my_local_install), [ "${ANDROID_3RDPARTY_BUILTIN}" ] && $(sprd_3rdparty_link_create "${my_local_link_files}") "install2" : SHELLINFO echo "SH_INFO:sprd_build_3rdparty install" >&2 # 4. clean "clean" :
+
+$(sprd_clean_3rdparty)
+
+# 5. ramdisk "ramdisk”: $(sprd_3rdparty_make_ramdisk ${ANDROID_3RDPARTY_TARGET_PRODUCT} ${ANDROID_3RDPARTY_TARGET_BUILD_VARIANT}) # 6. bootimage "bootimage" :
+
+$(sprd_3rdparty_make_bootimage)
+
+www.spreadtrum.com
+
+28
+
+UBOOT code
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+29
+
+UBOOT build shell
+
+Innovation changes the future
+
+#!/bin/bash LOCAL_CROSS_COMPILE=${ANDROID_3RDPARTY_ANDROID_TOP}/prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabifunction my_local_build() { # build myself related contents after build android [ -d ${ANDROID_3RDPARTY_ANDROID_TOP}/u-boot ] || return cd ${ANDROID_3RDPARTY_ANDROID_TOP}/u-boot make distclean case ${ANDROID_3RDPARTY_IMAGE_TAG} in sp8810ga|sp8810ga-softap) 可以生成 make CROSS_COMPILE=${LOCAL_CROSS_COMPILE} sp8810_config >&2 u-boot.bin make CROSS_COMPILE=${LOCAL_CROSS_COMPILE} >&2 u-boot-spl-16k.bin make CROSS_COMPILE=${LOCAL_CROSS_COMPILE} fdl2 >&2 dl2.bin ;; esac } function my_local_install() { # install your created files to the propery folder after android build finish [ -d ${ANDROID_3RDPARTY_ANDROID_TOP}/u-boot ] || return mkdir -p ${ANDROID_3RDPARTY_LIMAGE_DIR} cd ${ANDROID_3RDPARTY_ANDROID_TOP}/u-boot case ${ANDROID_3RDPARTY_IMAGE_TAG} in sp8810ga|sp8810ga-softap) cp u-boot.bin ${ANDROID_3RDPARTY_LIMAGE_DIR} cp nand_spl/u-boot-spl-16k.bin ${ANDROID_3RDPARTY_LIMAGE_DIR} cp nand_fdl/fdl2.bin ${ANDROID_3RDPARTY_LIMAGE_DIR} ;; esac } $(sprd_build_3rdparty $@)
+
+www.spreadtrum.com
+
+30
+
+U-boot build Makefile
+
+Innovation changes the future
+
+ALL += $(obj)u-boot.srec $(obj)u-boot.bin $(obj)System.map $(U_BOOT_NAND) $(U_BOOT_ONENAND) all: $(ALL) $(obj)u-boot.srec: $(obj)u-boot //二进制代码的Srecord格式，不同平台之间传输的格式，这里无用。 $(OBJCOPY) -O srec $< $@ $(obj)u-boot.bin: $(obj)u-boot //我们需要的映像 $(OBJCOPY) ${OBJCFLAGS} -O binary $< $@ $(BOARD_SIZE_CHECK) $(obj)u-boot: depend \ $(SUBDIRS) $(OBJS) $(LIBBOARD) $(LIBS) $(LDSCRIPT) $(obj)u-boot.lds $(GEN_UBOOT) …… $(NAND_SPL): $(TIMESTAMP_FILE) $(VERSION_FILE) depend $(MAKE) -C nand_spl/board/$(BOARDDIR) all …… $(NAND_FDL): $(MAKE) -C nand_fdl $@ SYSTEM_MAP = … $(obj)System.map: $(obj)u-boot @$(call SYSTEM_MAP,$<) > $(obj)System.map …… unconfig: Include/config.mk generated by @rm -f $(obj)include/config.h $(obj)include/config.mk \ $(MKCONFIG) ./mkconfig $(obj)board/*/config.tmp $(obj)board/*/*/config.tmp \ ARCH = arm $(obj)include/autoconf.mk $(obj)include/autoconf.mk.dep CPU = armv7 …… BOARD = sp8810 sp8810_config : unconfig VENDOR = spreadtrum @echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk SOC = sc8810 @$(MKCONFIG) $@ arm armv7 sp8810 spreadtrum sc8810
+
+www.spreadtrum.com
+
+31
+
+Link u-boot.bin UNDEF_SYM=`/home/apuser/source/1206/idh.code/prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi-objdump -x
+
+Innovation changes the future
+
+board/spreadtrum/sp8810/libsp8810.o api/libapi.o arch/arm/cpu/armv7/libarmv7.o arch/arm/cpu/armv7/sc8810/libsc8810.o arch/arm/lib/libarm.o common/libcommon.o disk/libdisk.o drivers/bios_emulator/libatibiosemu.o drivers/block/libblock.o drivers/dma/libdma.o drivers/fpga/libfpga.o drivers/gpio/libgpio.o drivers/hwmon/libhwmon.o drivers/i2c/libi2c.o drivers/input/libinput.o drivers/misc/libmisc.o drivers/mmc/libmmc.o drivers/mtd/libmtd.o drivers/mtd/nand/libnand.o drivers/mtd/onenand/libonenand.o drivers/mtd/spi/libspi_flash.o drivers/mtd/ubi/libubi.o drivers/net/libnet.o drivers/net/phy/libphy.o drivers/pci/libpci.o drivers/pcmcia/libpcmcia.o drivers/power/libpower.o drivers/rtc/librtc.o drivers/serial/libserial.o drivers/spi/libspi.o drivers/twserial/libtws.o drivers/usb/gadget/dwc_otg/libdwc_otg.o drivers/usb/gadget/libusb_gadget.o drivers/usb/host/libusb_host.o drivers/usb/musb/libusb_musb.o drivers/usb/phy/libusb_phy.o drivers/video/libvideo.o drivers/watchdog/libwatchdog.o fs/cramfs/libcramfs.o fs/ext2/libext2fs.o fs/fat/libfat.o fs/fdos/libfdos.o fs/jffs2/libjffs2.o fs/reiserfs/libreiserfs.o fs/ubifs/libubifs.o fs/yaffs2/libyaffs2.o lib/libfdt/libfdt.o lib/libgeneric.o lib/lzma/liblzma.o lib/lzo/liblzo.o net/libnet.o post/libpost.o property/libproperty.o | sed -n -e 's/.*\(__u_boot_cmd_.*\)/-u\1/p'|sort|uniq`; cd /home/apuser/source/1206/idh.code/u-boot && /home/apuser/source/1206/idh.code/prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi-ld -Bstatic -T u-boot.lds Ttext 0x00f00000 $UNDEF_SYM arch/arm/cpu/armv7/start.o --start-group api/libapi.o arch/arm/cpu/armv7/libarmv7.o arch/arm/cpu/armv7/sc8810/libsc8810.o arch/arm/lib/libarm.o common/libcommon.o disk/libdisk.o drivers/bios_emulator/libatibiosemu.o drivers/block/libblock.o drivers/dma/libdma.o drivers/fpga/libfpga.o drivers/gpio/libgpio.o drivers/hwmon/libhwmon.o drivers/i2c/libi2c.o drivers/input/libinput.o drivers/misc/libmisc.o drivers/mmc/libmmc.o drivers/mtd/libmtd.o drivers/mtd/nand/libnand.o drivers/mtd/onenand/libonenand.o drivers/mtd/spi/libspi_flash.o drivers/mtd/ubi/libubi.o drivers/net/libnet.o drivers/net/phy/libphy.o drivers/pci/libpci.o drivers/pcmcia/libpcmcia.o drivers/power/libpower.o drivers/rtc/librtc.o drivers/serial/libserial.o drivers/spi/libspi.o drivers/twserial/libtws.o drivers/usb/gadget/dwc_otg/libdwc_otg.o drivers/usb/gadget/libusb_gadget.o drivers/usb/host/libusb_host.o drivers/usb/musb/libusb_musb.o drivers/usb/phy/libusb_phy.o drivers/video/libvideo.o drivers/watchdog/libwatchdog.o fs/cramfs/libcramfs.o fs/ext2/libext2fs.o fs/fat/libfat.o fs/fdos/libfdos.o fs/jffs2/libjffs2.o fs/reiserfs/libreiserfs.o fs/ubifs/libubifs.o fs/yaffs2/libyaffs2.o lib/libfdt/libfdt.o lib/libgeneric.o lib/lzma/liblzma.o lib/lzo/liblzo.o net/libnet.o post/libpost.o property/libproperty.o board/spreadtrum/sp8810/libsp8810.o --end-group /home/apuser/source/1206/idh.code/u-boot/arch/arm/lib/eabi_compat.o -L /home/apuser/source/1206/idh.code/prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/../lib/gcc/arm-eabi/4.4.0 -lgcc -Map uboot.map -o u-boot /home/apuser/source/1206/idh.code/prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi-objcopy -O srec u-boot uboot.srec /home/apuser/source/1206/idh.code/prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi-objcopy --gap-fill 0xff -O binary u-boot u-boot.bin www.spreadtrum.com 32
+
+3rd party driver code
+
+Innovation changes the future
+
+3rdparty/lsensor/AL3006/specia/driver/Makefile obj-m:=al3006_pls.o //定义为可加载模块 3rdparty/lsensor/AL3006/special/init.3rdparty.rc on init device /dev/al3006_pls 666 system system on boot insmod /system/sps/AL3006/ko/al3006_pls.ko
+
+www.spreadtrum.com
+
+33
+
+3rd party driver Build Script
+3rdparty/lsensor/AL3006/special/build.sh #!/bin/bash function my_local_build() { # build myself related contents after build android cd ${MYCHIP_BASE}/driver make -C ${ANDROID_3RDPARTY_KERNEL_OUTPUT} \ CROSS_COMPILE=${ANDROID_3RDPARTY_CROSS_COMPILE} M=`pwd` \ $2 1>&2 # | tee >/dev/null # 2>&1 | tee >/dev/null } function my_local_install() { # install your created files to the propery folder after android build finish mkdir -p ${MYCHIP_BASE_INSTALL}/ko cd ${MYCHIP_BASE}/driver find . -iname '*.ko' | xargs -I xxxfile cp xxxfile ${MYCHIP_BASE_INSTALL}/ko cd ${MYCHIP_BASE_INSTALL}/ko ${ANDROID_3RDPARTY_CROSS_COMPILE}strip -g -S -d *.ko } $(sprd_build_3rdparty)
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+34
+
+Kernel code tree
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+35
+
+Kernel Make script
+
+Innovation changes the future
+
+3rdparty/common/make_kernel.sh
+
+1， //生成kernel or Image
+$(do_make_kernel $1 $2 $3 $4 $5 $6 $7 $8) ? make -f ${ANDROID_CUSTOMIZE_BASE}/shell/kernel.mk \ EXTRAVERSION=${ANDROID_3RDPARTY_KERNEL_EXTRAVERSION} \ CONFIG_DEBUG_SECTION_MISMATCH=${ANDROID_3RDPARTY_KERNEL_DEBUG_SECTION_MISMATCH} \ KERNEL_CONFIG=${ANDROID_3RDPARTY_KERNEL_CONFIG} \ MAKE_JOBS=${ANDROID_3RDPARTY_MAKE_JOBS} \ KERNEL_OUTPUT=${ANDROID_3RDPARTY_KERNEL_OUTPUT} \ KERNEL_CPU=${ANDROID_3RDPARTY_TARGET_KERNEL_CPU} \ DEL_DOTCONFIG=${del_dotconfig} \ KERNEL_PATH=${ANDROID_3RDPARTY_TARGET_KERNEL_SRC} $1 $2 $3 $4 $5 $6 $7 $8 >&2
+
+2， //生成boot.img
+mkbootimg --kernel ${BASE_DIR}/kernel \ --ramdisk ${BASE_DIR}/ramdisk.img \ --base 0x0 \ --output ${BASE_DIR}/boot.img \ --cmdline "${cmdline}“
+
+3，//生成linux.bin
+cp ${ANDROID_3RDPARTY_KERNEL_OUTPUT}/arch/arm/boot/Image ${BASE_DIR}/linux.bin dd conv=notrunc if=${BASE_DIR}/ramdisk.img obs=32k seek=$(( (0x700000 / 0x8000) - 1 )) of=${BASE_DIR}/linux.bin
+
+www.spreadtrum.com
+
+36
+
+Kernel Make script 2
+
+Innovation changes the future
+
+define kernel-make export PATH=$(KERNEL_CROSS_COMPILE_PATH):${PATH}; \ $(MAKE) -j$(MAKE_JOBS) -C $(KERNEL_PATH) \ ARCH=$(TARGET_ARCH) \ CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) \ O=$(KERNEL_OUTPUT) \
+
+TARGET_PREBUILT_KERNEL = $(KERNEL_OUTPUT)/arch/$(TARGET_ARCH)/boot/Image $(TARGET_PREBUILT_KERNEL): KERNEL_EXIST $(KERNEL_DOTCONFIG) $(hide) $(kernel-make) zImage modules … KERNEL_CONFIG2 = $(KERNEL_CPU)_defconfig //sc8810-sp8810-trusted-abs-android_defconfig KERNEL_DOTCONFIG_DEP = $(KERNEL_PATH)/arch/$(TARGET_ARCH)/configs/$(KERNEL_CONFIG2) $(KERNEL_DOTCONFIG): $(KERNEL_DOTCONFIG_DEP) @mkdir -p $(KERNEL_OUTPUT) @if [ ! -f $(KERNEL_OUTPUT)/.config ]; then \ echo "creating kernel config -- $(KERNEL_CONFIG2)"; \ $(kernel-make) $(KERNEL_CONFIG2); \ else \ echo ".config is ready"; \ fi … KERNEL_EXIST: @if [ "$(KERNEL_PATH)" != "$(KERNEL_OUTPUT)" ] && \ …
+
+www.spreadtrum.com
+
+37
+
+Kernel Make script 3
+kernel-make的展开：
+
+Innovation changes the future
+
+export PATH=/home/apuser/source/1206/idh.code/prebuilt/linux-x86/toolchain/arm-eabi4.4.3/bin/:/home/apuser/source/1206/idh.code/out/host/linux-x86/bin:/usr/lib/jvm/java-6sun/bin:/home/apuser/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games; make -j1 -C /home/apuser/source/1206/idh.code/kernel ARCH=arm CROSS_COMPILE=armeabi- O=/home/apuser/source/1206/idh.code/out/target/product/hsdroid/obj/KERNEL.sp8810ga CONFIG_DEBUG_SECTION_MISMATCH=y zImage modules
+
+sc8810-sp8810-trusted-abs-android_defconfig
+调用kernle目录的Makefile。
+
+www.spreadtrum.com
+
+38
+
+Kernel Makefile
+
+Innovation changes the future
+
+Linux内核Makefile分5个部分： Makefile 顶层Makefile：负责制作vmlinux(内核文件)与模块，通过递归向下访问子目录的形式 完成。并根据内核配置文件确定访问哪些子目录。ARM架构Makefile为arch/arm/Makefile，向顶层Makefile提供 其架构的特别信息。 .config 内核配置文件，由内核配置程序生成，Makefile阅读。 arch/$(ARCH)/Makefile 具体架构的Makefile scripts/Makefile.* 通用的规则和脚本等。面向所有的Kbuild Makefiles。这些文件被用来编译基于kbuild Makefile的内核。 Makefile.fwinst, Makefile.lib, Makefile.build, Makefile.headersinst , Makefile.modinst, Makefile.clean, Makefile.host, Makefile.modpost kbuild Makefiles 内核源代码中大约有500个这样的文件，每一个子目录都有一个Kbuild 的Makefile文件， 执行从上层目录传递下来的命令。Kbuild Makefile从.config文件中提取信息，生成Kbuild完成内核编译所需的文 件列表。 内核源代码依靠kbuild框架模型来组织： Documentation/kbuild/kbuild.txt Documentation/kbuild/makefiles.txt Documentation/kbuild/modules.txt Documentation/kbuild/kconfig.txt 4类kernel相关开发人员： *使用者*---- 编译内核的人。只需要键入“make menuconfig”或“make”这样的命令。 *普通开发人员*---- 工作在内核某一功能上的人，比如：驱动开发。 *架构开发人员* ----这是一些工作在具体架构，比如arm人。 *Kbuild开发者* ----维护Kbuild系统的人。他们需要知晓内核Makefile的方方面面。
+
+www.spreadtrum.com
+
+39
+
+Kernel Makefile for config
+kernel/Makefile include $(srctree)/arch/$(SRCARCH)/Makefile %config: scripts_basic outputmakefile FORCE //这个规则有三个依赖 $(Q)mkdir -p include/linux include/config $(Q)$(MAKE) $(build)=scripts/kconfig $@ … scripts_basic: //#该伪目标要执行的操作 $(Q)$(MAKE) $(build)=scripts/basic … outputmakefile: ifneq ($(KBUILD_SRC),) $(Q)ln -fsn $(srctree) source $(Q)$(CONFIG_SHELL) $(srctree)/scripts/mkmakefile \ $(srctree) $(objtree) $(VERSION) $(PATCHLEVEL) endif
+
+Innovation changes the future
+
+$< 依赖集 kernel/Makefile ifeq ($(KBUILD_VERBOSE),1) quiet = Q= else quiet=quiet_ Q = @ 目标集 endif
+
+$(build)指定obj目录是哪里
+$(MAKE):这里的MAKE不是Makefile 里面的变量，而是make命令内置的环 境变量，就是"make"。
+
+www.spreadtrum.com
+
+40
+
+Kernel Makefile for Image/zImage
+kernel/Makefile
+
+Innovation changes the future
+
+1, vmlinux: $(vmlinux-lds) $(vmlinux-init) $(vmlinux-main) vmlinux.o $(kallsyms.o) FORCE
+# vmlinux # ^ # | # +-< $(vmlinux-init) # | +--< init/version.o + more # | # +--< $(vmlinux-main) # | +--< driver/built-in.o mm/built-in.o + more # | # +-< kallsyms.o (see description in CONFIG_KALLSYMS section)
+vmlinux-init := $(head-y) $(init-y) vmlinux-main := $(core-y) $(libs-y) $(drivers-y) $(net-y) vmlinux-all := $(vmlinux-init) $(vmlinux-main) vmlinux-lds := arch/$(SRCARCH)/kernel/vmlinux.lds
+
+2， Image
+kernel/arch/arm/boot/Makefile $(obj)/Image: vmlinux FORCE $(call if_changed,objcopy) @echo ' Kernel: $@ is ready? $(obj)/compressed/vmlinux: $(obj)/Image FORCE $(Q)$(MAKE) $(build)=$(obj)/compressed $@ $(obj)/zImage: $(obj)/compressed/vmlinux FORCE $(call if_changed,objcopy) @echo ' Kernel: $@ is ready?
+
+www.spreadtrum.com
+
+41
+
+Linux Modules
+内核编译产生的可执行代码分布在两个部分：一个基本内核映像和数个可独立加载的模块。 前者作为Linux操作系统的主体而常驻内存；后者可按需要动态加载到内存中或从内存中卸载。
+
+Innovation changes the future
+
+实际开发中，模块包括两类： 一类是内核源代码中实际上已经实现的模块，这部分在内核构建过程中会编译出来，可称之为内部模块； 另外一部分是驱动程序开发者自己写出来的，通常被放在内核源码树之外目录中，可称之为外部模块，需自己单独编译。
+
+kernel/Makefile # We are always building modules KBUILD_MODULES := 1 PHONY += crmodverdir … module-dirs := $(addprefix _module_,$(KBUILD_EXTMOD)) PHONY += $(module-dirs) modules $(module-dirs): crmodverdir $(objtree)/Module.symvers $(Q)$(MAKE) $(build)=$(patsubst _module_%,%,$@) modules: $(module-dirs) @$(kecho) ' Building modules, stage 2.'; $(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
+
+www.spreadtrum.com
+
+42
+
+Android code tree
+
+Innovation changes the future
+
+|-- Makefile （全局的Makefile） |-- bionic （基础的库的源代码） libc, libdl, libm, libstdc++, libthread_db |-- bootable （启动引导相关） bootloader , diskinstaller , recovery |-- build （编译和配置所需要的脚本和工具） core ,libs,target,tools |-- cts （compatibility test suite，兼容性测试套件） tests ,tools |-- dalvik （JAVA虚拟机） dalvikvm , dexdump , libcore ,vm… |-- development （程序开发所需要的模板和工具） apps, simulator…… |-- device （） |-- external （目标机器使用的一些库） bzip2 , libpng , opencore ,qemu… 常 （应用程序的框架层，SDK的接口基本都是在这里实现的） base |-- frameworks |-- hardware 见 （与硬件相关的库） sprd\hsdroid 应 （Linux2.6的源代码） |-- kernel 用 （native development kit） |-- ndk |-- packages 框 （Android的各种应用程序） apps , providers[各种数据源实现].. |-- prebuilt 架 （Android在各种平台下编译的预置脚本） linux-x86 |-- sdk （ software development kit ） |-- system （Android的底层的一些库） bluetooth ,core, extras ,netd,vold, `-- vendor （ 厂商私有的代码） sprd
+
+www.spreadtrum.com
+
+43
+
+Android Build
+
+Innovation changes the future
+
+根目录下build目录展开如下： build/ |– buildspec.mk.default |– cleanspec.mk |– envsetup.sh (设置环境的脚本) |– core目录 （各种以mk为结尾的文件，它门是编译所需要的Makefile） |– libs目录 |– target目录（包含board和product两个目录，为目标所需要文件） |– tools目录 （编译过程中主机所需要的工具，一些需要经过编译生成） 常 其中，core目录中的Makefile是整个Android编译所需要的真正的 见 Makefile，它被顶层目录的Makefile引用。 含有*.mk文件，shell脚本以及 应 build/core/build-system.html等其它文件。 用 框 架
+
+www.spreadtrum.com
+
+44
+
+Android Build 2
+
+Innovation changes the future
+
+Android编译系统的架构： Android编译系统完成对目标和主机系统二进制文件、java应用程序的编译、链接、打包等，还包括生成各 种依赖关系、确保某个模块的修改引起相依赖的文件的重新编译链接，还包括目标文件系统的生成，配置文件的 生成等，因此Android编译系统具有支持多架构（linux-x86、windows、Darwin，ARM等）、多语言（汇编、C、 C++、Java等）、多目标、多编译方式。 根目录下的Makefile就包含一句话：include build/core/main.mk build/core下几个重要的*.mk文件： |– main.mk(主控Makefile) |– base_rules.mk(对一些Makefile的变量规则化) |– config.mk（关于编译参数、编译命令的一些配置） |– definations.mk（定义了很多编译系统中用到的宏，相当于函数库） |– Makefile（控制生成system.img,ramdisk.img,userdata.img,以及recorvery image，sdk等） |– Binary.mk(控制如何生成目标文件) 常 |– Clear_vars.mk（清除编译系统中用到的临时变量） 见 |– Combo/linux-arm.mk(控制如何生成linux-arm二进制文件，包括ARM相关的编译器，编译参数等的设置) 应 |– Copy_headers.mk（将头文件拷贝到指定目录） |– 分散于各个目录下的Android.mk(控制生成局部模块的源码，名称所需头文件路径，依赖库等特殊选项) 用 |– envsetup.mk(编译环境初始化，定义一些实用的shell函数，方便编译使用)
+
+框 架
+
+www.spreadtrum.com
+
+45
+
+Android Build graph
+
+Innovation changes the future
+
+customize /shell/build.3rdparty.common.sh function sprd_3rdparty_make_android() make PRODUCT-${1}-${2} ${ANDROID_3RDPARTY_OPT_CMD} $3 $4 $5 $6 $7 $8 -j${ANDROID_3RDPARTY_MAKE_JOBS} >&2 make PRODUCT-sprdroid_base-eng -j1
+
+常 见 应 用 框 架
+
+www.spreadtrum.com
+
+46
+
+Target in main.mk
+target .PHONY:checkbuilt checkbuilt: $(modules-to-check) .PHONY:prebuilt prebuit: $(ALL_PREBUILT) .PHONY: files files: prebuilt checkbuilt moduls-toinstall $(INSTALLED_ANDROID_INFO_TXT_TARGET) .PHONY: ramdisk ramdisk: $(INSTALL_RAMDISK_TARGET) .PHONY: systemimage systemimage: $(INSTALL_SYSTEMIMAGE) 说明 生成没有定义LOCAL_DONT_CHECK_MODULE的模块并拷贝到系统目录 拷贝预遍野的文件(比如用include prebuild.mk编译的)到系统目录 生成所有目标文件(包括：prebuile,modules-to-install,modules-tocheck,INSTALLED_ANDROID_INFO_TXT_TARGET)并拷贝到系统目录。
+
+Innovation changes the future
+
+.PHONY: userdataimage userdataimage:$(INSTALL_USERDATAIMAGE_TARGET) .PHONY: bootimage bootimage: $(INSTALL_BOOTIMAGE_TARGET)
+
+常 见 .PHONY: recoveryimage 应 recoveryimage:$(INSTALL_RECOVERYIMAGE_TARGET) 用 .PHONY: droidcore 框 droidcore: files systemimage \ $(INSTALLED_BOOTIMAGE_TARGET) \ 架
+$(INSTALLED_RECOVERYIMAGE_TARGET) \ $(INSTALLED_USERDATAIMAGE_TARGET) \ $(INSTALLED_FILES_FILE) .PHONY: apps_only droid .PHONY: .PHONY: .PHONY: .PHONY: .PHONY: sdk clean clobber modules showcommands
+
+生成ramdisk.img $(HOST_OUT_EXECUTABLES)/mkbootfs $(PRODUCT_OUT)/root|$(HOST_OUT_EXECUTABLES)/minizip > $(PRODUCT_OUT)/ramdisk.img 生成system.img $(INSTALLED_SYSTEMIMAGE): $(BUILT_SYSTEMIMAGE) $(HOST_OUT_EXECUTABLES)/mkyaffs2image$(PRODUCT_OUT)/system$(PRODUCT_OUT)/obj/PACKING/syste mimage_unopt_intermediates/system.img cp **/system.img (PRODUCT_OUT)/system.img 生成data.img $(HOST_OUT_EXECUTABLES)/mkyaffs2image $(PRODUCT_OUT)/data $(PRODUCT_OUT)/data.img 生成boot.img, $(HOST_OUT_EXECUTABLES)/mkbootimg --kernel $(PRODUCT_OUT)/kernel –ramdisk $(PRODUCT_OUT)/ramdisk.img >$(PRODUCT_OUT)/boot.img 生成ramdisk-recovery.img recovery.img, $(HOST_OUT_EXECUTABLES)/mkbootimg --kernel $(PRODUCT_OUT)/kernel –ramdisk$(PRODUCT_OUT)/ramdisk-recovery.img > $(PRODUCT_OUT)/recovery.img 生成整个系统 system.img ramdisk.img/boot.img ramdisk-recovery.img recovery.img userdata.img installedfiles.txt
+
+生成TARGET_BUILD_APPS指定的APPS模块. 若TARGET_BUILD_APPS包含all就编译全部APPS模块 默认target。ifneq ($(TARGET_BUILD_APPS),) droid: apps_only else droid:droidcore 生成sdk 删除生成文件 显示所有模块名 显示命令
+
+www.spreadtrum.com
+
+47
+
+Android module types
+
+Innovation changes the future
+
+常 见 应 用 框 架
+
+每一个本地模块最后都会include其中的一种来生成目标模块。
+
+www.spreadtrum.com
+
+48
+
+Android module example
+Libjavacore.a 静态库 @dalvik/libcore/JNativeCode.mk include $(CLEAR_VARS)# Define the rules. LOCAL_SRC_FILES := $(core_src_files) LOCAL_C_INCLUDES := $(core_c_includes) LOCAL_SHARED_LIBRARIES := $(core_shared_libraries) LOCAL_STATIC_LIBRARIES := $(core_static_libraries) LOCAL_MODULE := libjavacore Include $(BUILD_STATIC_LIBRARY) libandroid_runtime.so共享库组成 常 frameworks\base\core\jni\Android.mk 见 LOCAL_SRC_FILES:= \ ActivityManager.cpp \ 应 AndroidRuntime.cpp \ 用 CursorWindow.cpp \ …about 100 files… 框 android_backup_BackupHelperDispatche 架 r.cpp LOCAL_MODULE:= libandroid_runtime include $(BUILD_SHARED_LIBRARY) include $(call all-makefilesunder,$(LOCAL_PATH))
+
+Innovation changes the future
+
+Core.jar 编译 @dalvik/libcore/JavaLibrary.mk core_src_files := $(call all-core-java-files,main) core_resource_dirs := $(call all-core-resource-dirs,main) # Definitions to make the core library. include $(CLEAR_VARS) LOCAL_SRC_FILES := $(core_src_files) LOCAL_JAVA_RESOURCE_DIRS := $(core_resource_dirs) LOCAL_NO_STANDARD_LIBRARIES := true LOCAL_DX_FLAGS := --core-library LOCAL_NO_EMMA_INSTRUMENT := true LOCAL_NO_EMMA_COMPILE := true LOCAL_MODULE := core Include $(BUILD_JAVA_LIBRARY)
+
+www.spreadtrum.com
+
+49
+
+Android module example 2
+
+Innovation changes the future
+
+libandroid_servers.so共享库组成 Services.jar库组成 frameworks/base/services/jni/Android.mk: frameworks/base/services/java/Android.mk: LOCAL_SRC_FILES:= \ include $(CLEAR_VARS) com_android_server_AlarmManagerService.cpp \ LOCAL_SRC_FILES := \ com_android_server_BatteryService.cpp \ $(call all-subdir-java-files) \ com_android_server_KeyInputQueue.cpp \ com/android/server/EventLogTags.logtags \ com_android_server_LightsService.cpp \ com/android/server/am/EventLogTags.logtags com_android_server_SensorService.cpp \ LOCAL_MODULE:= services com_android_server_SystemServer.cpp \ LOCAL_JAVA_LIBRARIES := android.policy com_android_server_VibratorService.cpp \ include $(BUILD_JAVA_LIBRARY) onload.cpp LOCAL_MODULE:= libandroid_servers Framework.jar库组成 include $(BUILD_SHARED_LIBRARY) frameworks/base/Android.mk: 常 # FRAMEWORKS_BASE_SUBDIRS comes from build/core/pathmap.mk FRAMEWORKS_BASE_SUBDIRS := \ 见 /java, \ $(addsuffix LOCAL_SRC_FILES := $(call find-other-javacore \ 应 files,$(FRAMEWORKS_BASE_SUBDIRS)) graphics \ location \ LOCAL_SRC_FILES += \ all aidl files in subfolders 用 media \ LOCAL_NO_STANDARD_LIBRARIES := true opengl \ 框 LOCAL_JAVA_LIBRARIES := core ext sax \ 架 telephony \ LOCAL_MODULE := framework wifi \ LOCAL_MODULE_CLASS := JAVA_LIBRARIES vpn \ keystore \ # List of classes and interfaces which should be loaded by the Zygote. ) Framework-res.apk组成 LOCAL_JAVA_RESOURCE_FILES += $(LOCAL_PATH)/preloaded-classes frameworks/base/core/res/Android.mk: #LOCAL_JARJAR_RULES := $(LOCAL_PATH)/jarjar-rules.txt LOCAL_PACKAGE_NAME := framework-res LOCAL_DX_FLAGS := --core-libraryi LOCAL_CERTIFICATE := platform nclude $(BUILD_JAVA_LIBRARY) include $(BUILD_PACKAGE) www.spreadtrum.com 50
+
+修改记录
+版本 V0.1 V1.0.0 日期 2011.08.24 2012.02.28 作者 XQ XQ 说明 初稿 针对8810作部分修改
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+51
+
+www.spreadtrum.com
+Innovation changes the future
+
+谢谢
+
+上海· 北京· 深圳· 圣迭戈· 韩国·印度
+
+www.spreadtrum.com
+
+52

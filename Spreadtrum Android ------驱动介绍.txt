@@ -1,0 +1,750 @@
+Spreadtrum Android 8810
+
+www.spreadtrum.com
+
+Spreadtrum Android ------驱动介绍 v1.0.0
+TD FAE
+
+上海·北京· 深圳· 圣迭戈· 韩国· 印度 人力资源部－培训发展组
+
+.1
+
+Innovation changes the future
+
+课程名称： Spreadtrum Android 驱动介绍 课程类别：通用课程
+课程目标： 1，了解8810 Android系统的驱动架构。 2，了解8810 Android系统常用器件驱动修改。
+
+www.spreadtrum.com
+
+2
+
+主要内容
+
+Innovation changes the future
+
+Linux驱动介绍
+
+Linux 驱动加载流程
+
+Android 的linux内核与驱动程序介绍
+
+8810驱动代码介绍 8810 GPIO设置调试
+
+www.spreadtrum.com
+
+3
+
+Linux驱动介绍
+
+内核编译
+
+Innovation changes the future
+
+8810内核缺省配置 kernel/arch/arm/configs/sc8810-sp8810-trusted-abs-android_defconfig。 参与内核编译的配置out/target/product/hsdroid/obj/KERNEL.sp8810ga/.config。 如何执行make menuconfig apuser@ubt:~/source/1206/idh.code/out/target/product/hsdroid/obj/KERNEL.sp8810ga$ make menuconfig 修改之后会保存在out/target/product/hsdroid/obj/KERNEL.sp8810ga/.config文件中。新编译中会从缺省配置生成.config.
+
+CONFIG_NKERNEL=y CONFIG_NKERNEL_DDI=y CONFIG_TEXT_OFFSET=0x4508000 CONFIG_ARCH_SC8810=y CONFIG_MACH_SP8810=y … CONFIG_KEYBOARD_SC8810=y CONFIG_INPUT_TOUCHSCREEN=y CONFIG_FB_SC8810=y CONFIG_LEDS_SC8810_KB=y CONFIG_LEDS_SC8810_LCD=y … CONFIG_SPI_SC8810=y CONFIG_SPRD_POWER=y … CONFIG_VIDEO_DCAM_SPRD=y
+
+www.spreadtrum.com
+
+4
+
+Linux驱动介绍
+
+总线、设备、驱动
+
+Innovation changes the future
+
+linux2.6提供的设备模型：总线、驱动、设备。
+系统中的任一设备在设备模型中都由一个device对象描述 系统中的每个驱动程序由一个device_driver对象描述 系统中总线由struct bus_type描述 基本关系简要的概括如下： 驱动核心可以注册多种类型的总线。 每种总线下面可以挂载许多设备。(通过kset devices) 每种总线下可以用很多设备驱动。(通过包含一个kset drivers)} 每个驱动可以处理一组设备。 所有的设备都挂载到总线上，当加载驱动时，驱动就在总线上找到自己对应的设备。 或者先把驱动加载上，来了一个设备就去总线找驱动。 从2.6版本开始引入了platform这个概念，虚拟总线，不是通过实际总线连接的设备，如键盘。 基于platform平台的设备，主要由两部分组成：platform_device 和paltform_driver构成。 实际总线，I2C,I2S,SPI,USB等
+
+www.spreadtrum.com
+
+5
+
+Linux驱动介绍 platform总线设备和驱动的加载过程
+1，注册总线：platform bus先被kernel注册。 do_basic_setup() ? driver_init() ? platform_bus_init() ? bus_register()
+
+Innovation changes the future
+
+2，注册设备：系统初始化过程中调用platform_add_devices或者platform_device_register，将平台设备(platform devices) 注册到平台总线中(platform bus) Platform_device_register() ? platform_device_add() ?(pdev->dev.bus = &platform_bus_type) ?device_add()，就这 样把设备给挂到虚拟的总线上。 3，注册驱动： 平台驱动(platform driver)与平台设备(platform device)的关联是在platform_driver_register或者driver_register中实现 ，一般这个函数在驱动的初始化过程调用。 通过这三步，就将平台总线，设备，驱动关联起来。 Platform_driver_register() ? driver_register() ? bus_add_driver() ? driver_attach() ? bus_for_each_dev(), 对在每个挂在虚拟的platform bus的设备作__driver_attach() ? driver_probe_device(),判断drvàbusàmatch()是否执 行成功，此时通过指针执行platform_match ? strncmp(pdev->name , drv->name , BUS_ID_SIZE),如果相符就调用 really_probe(实际就是执行相应设备的platform_driver àprobe(platform_device)。)开始真正的探测，如果probe成功 ，则绑定设备到该驱动。
+
+www.spreadtrum.com
+
+6
+
+Linux 驱动加载流程
+
+Innovation changes the future
+
+系统启动的控制权交给kernel，kernel会初始化系统中各设备并做相关配置工作。之后加载设备驱动，设备驱动有两类： 一类设备驱动编入linux kernel中，kernel会调用这部分驱动初始化相关设备， 另外一类是编译成模块，根据脚本使用insmod来加载。 main.c(kernel/init) static int __init kernel_init(void * unused) { … do_basic_setup();
+static void __init do_basic_setup(void) { init_workqueues(); cpuset_init_smp(); usermodehelper_init(); init_tmpfs(); driver_init(); init_irq_proc(); do_ctors(); do_initcalls();//执行各驱动模块加载函数, all module_init(xxx) , //from __initcall_start to __initcall_end。 // #define module_init(x) __initcall(x); // #define __initcall(fn) device_initcall(fn) // #define device_initcall(fn) __define_initcall("6",fn,6) }
+
+常 见 应 用 框 架
+
+void __init driver_init(void) { /* the core pieces */ devices_init(); buses_init(); classes_init(); firmware_init(); hypervisor_init(); /* also core pieces, part II*/ platform_bus_init(); system_bus_init(); cpu_dev_init(); memory_dev_init(); }
+
+www.spreadtrum.com
+
+7
+
+Linux 驱动加载流程
+
+Innovation changes the future
+
+start_kernel()->rest_init()->kernel_init()->do_basic_setup()->do_initcalls()。 for (call = __early_initcall_end; call < __initcall_end; call++) do_one_initcall(*call); vmlinux.lds中 .initcall.init : { __initcall_start = .; *(.initcallearly.init) __early_initcall_end = .; *(.initcall0.init) *(.initcall0s.init) *(.initcall1.init) *(.initcall1s.init) *(.initcall2.init) *(.initcall2s.init) *(.initcall3.init) *(.initcall3s.init) *(.initcall4.init) *(.initcall4s.init) *(.initcall5.init) *(.initcall5s.init) *(.initcallrootfs.init) *(.initcall6.init) *(.initcall6s.init) *(.initcall7.init) *(.initcall7s.init) __initcall_end = .; }
+
+Linux内核为不同驱动的加载顺序对应不同的优先级，定义了一些宏： include\linux\init.h #define pure_initcall(fn) __define_initcall("0",fn,1) #define core_initcall(fn) __define_initcall("1",fn,1) #define core_initcall_sync(fn) __define_initcall("1s",fn,1s) #define postcore_initcall(fn) __define_initcall("2",fn,2) #define postcore_initcall_sync(fn) __define_initcall("2s",fn,2s) #define arch_initcall(fn) __define_initcall("3",fn,3) #define arch_initcall_sync(fn) __define_initcall("3s",fn,3s) #define subsys_initcall(fn) __define_initcall("4",fn,4) #define subsys_initcall_sync(fn) __define_initcall("4s",fn,4s) #define fs_initcall(fn) __define_initcall("5",fn,5) #define fs_initcall_sync(fn) __define_initcall("5s",fn,5s) #define rootfs_initcall(fn) __define_initcall("rootfs",fn,rootfs) #define device_initcall(fn) __define_initcall("6",fn,6) #define device_initcall_sync(fn) __define_initcall("6s",fn,6s) #define late_initcall(fn) __define_initcall("7",fn,7) #define late_initcall_sync(fn) __define_initcall("7s",fn,7s)
+
+www.spreadtrum.com
+
+8
+
+Linux 驱动加载流程
+在MODULE没有定义这种情况下，模块是要编译进内核的(obj-y) module_init定义如下 #define module_init(x) __initcall(x); #define __initcall(fn) device_initcall(fn) #define device_initcall(fn) __define_initcall("6",fn,6) #define __define_initcall(level,fn,id) \ static initcall_t __initcall_##fn##id __used \ __attribute__((__section__(".initcall" level ".init"))) = fn 所以，module_init(x)最终展开为： static initcall_t __initcall_##fn##id __used \ __attribute__((__section__(".initcall" level ".init"))) = fn 假设driver所对应的模块初始化函数为int gpio_init(void)， 那么module_init(gpio_init)实际上等于: static initcall_t __initcall_gpio_init_6 __used __attribute__((__section__(".initcall6.init"))) = gpio_init; 就是声明一类型为initcall_t（typedef int (*initcall_t)(void)）函数指针类型的变量 __initcall_gpio_init_6并将gpio_init赋值与它。
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+9
+
+Linux驱动介绍
+
+键盘设备注册
+static void __init openphone_init(void){ …sprd_add_devices();… }
+
+Innovation changes the future
+
+\arch\arm\kernel\setup.c static int __init customize_machine(void) { /* customizes platform devices, or adds new ones */ if (init_machine) init_machine(); return 0; } arch_initcall(customize_machine);
+
+[arch\arm\mach-sc8810\common.c] void __init sprd_add_devices(void){ platform_add_devices(devices, ARRAY_SIZE(devices)); } static struct platform_device *devices[] __initdata = { &sprd_kpad_device, … }; Platform device设备描述 static struct platform_device sprd_kpad_device = { .name = "sprd-keypad8805ga", .id = -1, .num_resources = ARRAY_SIZE(sprd_kpad_resources), .resource = sprd_kpad_resources, }; 资源描述： static struct resource sprd_kpad_resources[] = { { .start = IRQ_KPD_INT, .end = IRQ_KPD_INT, .flags = IORESOURCE_IRQ, },
+
+[arch\arm\mach-sc8810\board-sp8810\board_cfg.c] MACHINE_START(OPENPHONE, “SP8810”) .phys_io = SPRD_SERIAL1_PHYS, .io_pg_offst = ((SPRD_SERIAL1_BASE) >> 18) & 0xfffc, .map_io = openphone_map_io, .init_irq = openphone_init_irq, .init_machine = openphone_init, .timer = &sprd_timer, .fixup = openphone_fixup, MACHINE_END
+
+www.spreadtrum.com
+
+10
+
+Linux驱动介绍
+
+键盘设备的驱动注册
+
+Innovation changes the future
+
+Platform driver驱动（keypad） [\drivers\input\keyboard\sc8800g-keys.c] struct platform_driver sprd_kpad_device_driver = { .driver = { .name = DRV_NAME, // #define DRV_NAME "sprd-keypad8805ga" .owner = THIS_MODULE, }, .probe = sprd_kpad_probe, .remove = __devexit_p(sprd_kpad_remove), .suspend = sprd_kpad_suspend, .resume = sprd_kpad_resume, }; static int __init sprd_kpad_init(void) return platform_driver_register(&sprd_kpad_device_driver); static void __exit sprd_kpad_exit(void) platform_driver_unregister(&sprd_kpad_device_driver); module_init(sprd_kpad_init); module_exit(sprd_kpad_exit);
+
+static int __devinit sprd_kpad_probe(struct platform_device *pdev){ struct input_dev *input; request_irq(sprd_kpad->irq, sprd_kpad_isr, 0, DRV_NAME, pdev); input = input_allocate_device(); input_register_device(input); www.spreadtrum.com 11
+
+Linux驱动介绍
+
+主要函数介绍
+
+Innovation changes the future
+
+设备驱动初始化与注册函数
+int platform_device_register(struct platform_device *pdev) void platform_device_unregister(struct platform_device *pdev) int platform_driver_register(struct platform_driver *drv) void platform_driver_unregister(struct platform_driver *drv)
+
+www.spreadtrum.com
+
+12
+
+Linux驱动介绍
+
+主要函数介绍
+
+Innovation changes the future
+
+加载和卸载驱动程序 驱动编译到内核中 module_init()， module_exit()
+
+加载与卸载模块 模块作为内核的一部分，但并未被编译到内核中 insmod命令加载? init_module() rmmod命令来卸载? cleanup_ module() lsmod命令来查看所有已加载的模块的状态。
+
+www.spreadtrum.com
+
+13
+
+Linux驱动介绍
+
+主要函数介绍
+
+Innovation changes the future
+
+内存操作函数 申请和释放内存调用kmalloc和kfree， 它们在linux/kernel.h中被定义为： void * kmalloc(unsigned int len, int priority); void kfree(void * obj);
+
+www.spreadtrum.com
+
+14
+
+Linux驱动介绍
+
+主要函数介绍
+
+Innovation changes the future
+
+中断管理 设备驱动程序通过调用request_irq函数来申请中断，通过free_irq来释放中断。 int request_irq( unsigned int irq, void (*handler)(int irq,void dev_id,struct pt_regs *regs), unsigned long flags, const char *device, void *dev_id ); void free_irq(unsigned int irq, void *dev_id); 通常从request_irq函数返回的值为0时，表示申请成功；负值表示出现错误。 irq表示所要申请的硬件中断号。 handler为向系统登记的中断处理子程序，中断产生时由系统来调用，调用时 所带参数irq为中断号，dev_id为申请时告诉系统的设备标识，regs为中断发生 时寄存器内容。 device为设备名，将会出现在/proc/interrupts文件里。 中断处理函数： 1，关中断，开中断。 2，耗时要短
+www.spreadtrum.com 15
+
+Linux驱动介绍
+
+开发流程（字符设备为例）
+
+Innovation changes the future
+
+1.驱动程序初始化 驱动程序初始化在函数***_init()完成，字符设备是通过 register_chrdev()函数注册，向系统申请主设备号，成功后设备名字出 现在/dev里。 2.构造file_operations结构中要的各个成员函数 linux操作系统将所有设备看成文件，以操作文件的方式访问设备。应用 程序不能够直接操作硬件，使用统一的接口函数调用硬件驱动程序。接口 函数包括（open,release,read,write,ioctl等）。 3.设备中断轮询处理 模块在使用中断前要先请求一个中断通道，并在使用后释放它。通过 request_irq()函数来注册中断，free_irq（）函数来释放。 4.驱动程序的测试 在驱动程序中添加printk()打印函数
+
+www.spreadtrum.com
+
+16
+
+Android 的linux内核与驱动程序介绍
+Android系统驱动所处的位置
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+17
+
+Android 的linux内核与驱动程序介绍
+
+Innovation changes the future
+
+Andriod 中内核的结构和标准的linux2.6内核基本 是相同的，Android在标准的linux内核中主要增 加的内容是一些驱动程序。主要分成两种类型 1.Android 专用设备驱动 2.Android 普通设备驱动
+
+www.spreadtrum.com
+
+18
+
+Android 的linux内核与驱动程序介绍
+
+专用驱动
+
+Innovation changes the future
+
+专用驱动不是linux标准驱动，一般并不操作实际的硬件，只是辅助系统的运行。 Ashmem:匿名共享内存驱动，用户空间对Ashmem进行封装并且提供接口。Ashmem为Android 系统提供了内存分配功能，相比于传统的malloc，mmap等内存分配机制，优势是提供 内存回收算法。 Low Memory killer 系统缺少内存时杀死进程 Linux 采用OOM机制，在系统内存不足时选择一个进程杀掉。 LMK在用户空间指定一组内存临界值，若进程描述中的oom_adj与其在同一范围时，该进程 被杀掉。 Logger 工具 Android用户空间logcat程序调用Logger驱动 Logger包括三个设备节点，/dev/log/main,/dev/log/radio,/dev/log/event 用adb shell cat /proc/kmsg看kernel输出log. PMEM:向用户提供大块连续的物理内存，给GPU/VPU buffer等。 Switch：检测耳机插入，USB插入等 Timed GPIO：时间控制的GPIO，振动器
+
+www.spreadtrum.com
+
+19
+
+Android 的linux内核与驱动程序介绍
+
+专用驱动
+
+Innovation changes the future
+
+Binder:为用户层提供IPC支持，本地进程“执行”其它进程的功能。开 辟一块共享内存作为数据交换。 内核代码 Kernel/include/linux/binder.h Kernel/mm/binder.c Frameworks/base/libs/binder/ 用户空间封装 Service manager守护进程调用binder接口提供对整个系统支持，所有服 务的管理者，特殊的服务。 Frameworks/base/cmds/servicemanager 各个Service，包括C++service，JAVAservice，serviceManager有线程 处理IPC执行本地消息。设备/dev/binder。
+
+www.spreadtrum.com
+
+20
+
+8810客制化驱动代码架构
+
+Innovation changes the future
+
+Board配置 客户配置目录路径 customize/customer_cfg/sp8810ga/kernel/board/board_cfg.c Link路径 [arch\arm\mach-sc8800g\common.c] kernel/arch/arm/mach-sc8810/board-sp8810/ void __init sprd_add_devices(void) { platform_add_devices(devices, ARRAY_SIZE(devices)); }
+
+static void __init openphone_init(void) static struct platform_device *devices[] __initdata = { { chip_init(); &sprd_kpad_device, ADI_init(); &sprd_nand_device, LDO_Init(); &sprd_i2c_device, sprd_pin_map_init(); &sprd_fb_device, sprd_gpio_init(); &sprd_battery_device, sprd_i2c_init(); platform_add_devices(devices, ARRAY_SIZE(devices));&sprd_kp_bl_device, sprd_add_devices(); &sprd_lcd_bl_device, eic_init(); &sprd_serial_device, sprd_add_sdio_device(); &sprd_tp_device, sprd_add_otg_device(); &sprd_2d_device, sprd_gadget_init(); sprd_add_dcam_device(); &sprd_scale_device, sprd_spi_init(); &sprd_rotation_device, sprd_wifildo_init(); //WIFI vreg ana and digital &sprd_vsp_device, sprd_charger_init(); &inno_demod_device, sprd_ramconsole_init(); }; }
+
+www.spreadtrum.com
+
+21
+
+8810客制化驱动代码架构
+Pinmap配置 客户配置目录路径 customize/customer_cfg/sp8810ga/kernel/pinmap/pinmap.c Link路径 kernel/arch/arm/mach-sc8810/board-sp8810/ GPIO配置 客户配置目录路径 customize/customer_cfg/sp8810ga/kernel/gpio/gpio_cfg.c Link路径 kernel/arch/arm/mach-sc8810/board-sp8810/ keypad配置 客户配置目录路径 customize/customer_cfg/sp8810ga/kernel/kpd/keypad_cfg.c Link路径 kernel/arch/arm/mach-sc8810/board-sp8810/ I2C配置 客户配置目录路径 customize/customer_cfg/sp8810ga/kernel/i2c/i2c_cfg.c Link路径 kernel/arch/arm/mach-sc8810/board-sp8810/
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+22
+
+8810客制化驱动代码架构
+customize/make/sp8810ga.mak # SPRD Build System BUILD_SPRD_PLATFORM = sc8810 BUILD_KERNE_MACHINE = CONFIG_MACH_SP8810 BUILD_KERNEL_VERSION = kernel BUILD_UBOOT_VERSION = u-boot # Customize for customer driver(configured according to your need) 3RDPARTY_BLUETOOTH = BC6888 3RDPARTY_CAMERA = ov5640:ov2655:ov7675:ov2640:gc0309:nmi601 3RDPARTY_LCD = hx8369 3RDPARTY_GSENSOR = lis3dh 3RDPARTY_MSENSOR = akm8975 3RDPARTY_LSENSOR = AL3006 3RDPARTY_GPS = gsd4t 3RDPARTY_TP = PIXCIR 3RDPARTY_WIFI = UNIFI6030 3RDPARTY_FM = kt0812G #3RDPARTY_ATV = nmi601 3RDPARTY_APP = app8810 3RDPARTY_ANIM = poweranim # SPRD COMMON MODULE(dedicated!!!.should not change) 3RDPARTY_TOOLS = iperf-2.0.4:wireless_tools.29:tools-binary:testjar 3RDPARTY_HEADSET = headset-soc 3RDPARTY_AUDIO = snd_dummy_alsa_audio 3RDPARTY_MEDIASERVER = mediaserver_listener 3RDPARTY_FIREWALL= yeezone 3RDPARTY_UBOOT = uboot 3RDPARTY_CMMB = IF238 3RDPARTY_CMCC = CMCC 3RDPARTY_GPU = mali
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+23
+
+8810客制化驱动代码架构
+LCD配置 客户配置目录路径 customize/customer_cfg/sp8810ga/kernel/lcd/lcd_cfg.c 3rdparty/lcd/3rdname1/kernel/lcd_xxxx.c(驱动) 3rdparty/lcd/3rdname2/kernel/lcd_xxxx.c(驱动) 3rdparty/lcd/3rdname3/kernel/lcd_xxxx.c(驱动) Link路径 kernel/arch/arm/mach-sc8810/board-sp8810/ kernel/drivers/video/sc8810/ (驱动) Camera配置 客户配置目录路径 customize/customer_cfg/sp8810ga/kernel/camera/camera_cfg.c 3rdparty/camera/3rdname1/kernel/sensor_xxxx.c(驱动) 3rdparty/camera/3rdname2/kernel/sensor_xxxx.c(驱动) Link路径 kernel/arch/arm/mach-sc8810/board-sp8810/ kernel/drivers/media/video/sprd-dcam/ (驱动) TP配置 客户配置目录路径 3rdparty/tp/3rdname/special/(驱动) Sensor配置 客户配置目录路径 3rdparty/app/app8810/special/android/hardware/sprd/hsdroid/libsensors/(HAL层) 3rdparty/gsensor/3rdnameG/special/ 3rdparty/msensor/3rdnameM/special/ 3rdparty/lsensor/3rdnameL/special/ 3rdparty/psensor/3rdnameP/special/ customize/customer_cfg/sp8810ga//proprietary/bin/akmd8975 （Msensor守护进程）
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+24
+
+驱动程序介绍
+
+framebuffer驱动
+
+Innovation changes the future
+
+Framebuffer驱动
+文件接口调用（open，read，writ，ioctl等）
+
+用户空间 8810 Framebuffer 具体实现（fb_main.c） Framebuffer 设备 /dev/graphics/fb0 注册 register_framebuffer 内核空间 Framebuffer 核心驱动（fbmem.c）
+
+注册 register_chrdev 字符设备驱动程序核心 实际硬件
+
+www.spreadtrum.com
+
+25
+
+驱动程序介绍
+
+framebufffer驱动
+
+Innovation changes the future
+
+1. fb_main.c LCD驱动相关文件 /kernel/drivers/video/sc8810/fb_main.c static int32_t lcm_send_cmd (uint32_t cmd) { while(__raw_readl(LCM_CTRL) & BIT20); __raw_writel(cmd, LCM_CD0); return 0; } static int32_t lcm_send_data (uint32_t data) { while(__raw_readl(LCM_CTRL) & BIT20); __raw_writel(cmd, LCM_CD0); while(__raw_readl(LCM_CTRL) & BIT20); __raw_writel(data, LCM_DATA0); return 0; } static int sc8810fb_probe(struct platform_device *pdev) { ? lcd_adapt = find_adapt_from_uboot(platform_data); if (lcd_adapt == -1) { info->need_reinit = 1; lcd_adapt = find_adapt_from_readid(info,platform_data); } mount_panel(info, lcd_panel[lcd_adapt].panel); //Framebuffer关联LCD static int __init sc8810fb_init(void){ return platform_driver_register(&sc8810fb_driver); } module_init(sc8810fb_init);
+
+www.spreadtrum.com
+
+26
+
+驱动程序介绍
+
+framebuffer驱动
+
+Innovation changes the future
+
+2,lcd列表 customize/customer_cfg/sp8810ga/kernel/lcd_cfg.c Linked to: kernel/arch/arm/mach-sc8810/board-sp8810/lcd_cfg.c static struct lcd_panel_cfg lcd_panel[] = { [0]={ .lcd_id = LCD_PANEL_ID_HX8369, .panel = &lcd_panel_hx8369, }, }; ? 3.具体lcd驱动 3rdparty/lcd/hx8369/kernel/lcd_hx8369.c Linked to: kernel/drivers/video/sc8800g/lcd_hx8369.c static struct info_mcu lcd_hx8369_info = { .bus_mode = LCD_BUS_8080, .bus_width = 24, .timing = lcd_hx8369_timing, .ops = NULL, }; struct lcd_spec lcd_panel_hx8369 = { .width = 480, .height = 800, .mode = LCD_MODE_MCU, .direction = LCD_DIRECT_NORMAL, .info = {.mcu = &lcd_hx8369_info}, .ops = &lcd_hx8369_operations, }; 4,HAL使用该设备 hardware\sprd\hsdroid\libgralloc\framebuffer.cpp open(“/dev/graphics/fb0”,?)
+
+www.spreadtrum.com
+
+27
+
+驱动程序介绍 Keypad驱动
+Event输入设备驱动（以keypad为例）
+文件接口调用（open，poll，read，ioctl等）
+
+Innovation changes the future
+
+用户空间 内核空间
+
+8805 key 具体实现（sc8800g-keys.c） 输入设备/dev/input/event0 sprd-keypad
+
+注册 input_register_device
+
+Input核心驱动（input.c）
+
+注册 register_chrdev
+
+字符设备驱动程序核心
+
+实际硬件
+
+www.spreadtrum.com
+
+28
+
+驱动程序介绍 Key驱动 上报scancode
+
+Innovation changes the future
+
+customize/customer_cfg/sp8810ga/kernel/kpd/keypad_cfg.c Linked to:kernel/arch/arm/mach-sc8810/board-sp8810/ static const unsigned int sprd_keymap[] = { // 0 row KEYVAL(0, 0, ANDROID_KEY_VOLUME_DOWN), KEYVAL(0, 1, ANDROID_KEY_CAMERA), // 1 row KEYVAL(1, 0, ANDROID_KEY_VOLUME_UP), }; int sprd_3rdparty_gpio_key0 = 163; static struct sprd_gpio_keys sprd_gpio_keymap[] = { {&sprd_3rdparty_gpio_key0 ,ANDROID_KEY_POWER}, }; struct sprd_kpad_platform_data sprd_kpad_data = { .rows = CUSTOM_KEYPAD_ROWS, .cols = CUSTOM_KEYPAD_COLS, .keymap = sprd_keymap, .keymapsize = ARRAY_SIZE(sprd_keymap), .gpio_keymap = sprd_gpio_keymap, .gpio_keymapsize = ARRAY_SIZE(sprd_gpio_keymap), .repeat = 0, .debounce_time = 5000, /* ns (5ms) */ .coldrive_time = 1000, /* ns (1ms) */ .keyup_test_interval = 50, /* 50 ms (50ms) */ }; kernel\drivers\input\keyboard\sc8800g-keys.c static int __init sprd_kpad_init(void){ return platform_driver_register(&sprd_kpad_device_driver); } input_report_key(sprd_kpad->input, key, 1); static int __devinit sprd_kpad_probe(struct platform_device *pdev) error = request_irq(sprd_kpad->irq, sprd_kpad_isr, 0, DRV_NAME, pdev); www.spreadtrum.com 29 error = input_register_device(input);
+
+驱动程序介绍 Keypad layout：scancode->keycode
+
+Innovation changes the future
+
+HAL和UI使用输入设备： 3rdparty\products\sp8805ga\android\hardware\sprd\hsdroid\libsensors\sprd_sensors_sp8805ga.c /system/usr/keylayout open(“/dev/input/*”,…) # ls frameworks\base\libs\ui\EventHub.cpp headset-keyboard.kl open(“/dev/input/eventx”,…) //key,… sprd-keypad8810.kl AVRCP.kl customize/customer_cfg/sp8810ga/res/sprd-keypad8810.kl配置文件修改 [keypad layout] qwerty.kl key SCANCODE KEYCODE [FLAGS...] key 116 POWER WAKE //设备进入睡眠的时候，按下这个键将唤醒，而且发送消息给应用层 key 115 VOLUME_UP key 114 VOLUME_DOWN key 212 CAMERA 3rdparty/headset/headset-soc/special/keylayout/headset-keyboard.kl key 226 HEADSETHOOK WAKE //#define KEY_MEDIA 226 in input.h, sent from headset.c key 107 ENDCALL WAKE //#define KEY_END 107 in input.h , sent from headset.c key 223 CALL WAKE //#define KEY_CANCEL 223 in input.h , sent from headset.c key 139 MENU WAKE #define KEY_MENU 139 in input.h , sent from headset.c frameworks/base/libs/ui/EventHub.cpp int EventHub::open_device(const char *deviceName) ? fd = open(deviceName, O_RDWR); ?device->layoutMap->load(keylayoutFilename); status_t KeyLayoutMap::load(const char* filename) @ frameworks\base\libs\ui\KeyLayoutMap.cpp 通过解析*.kl 把按键的映射关系保存在 ：KeyedVector<int32_t,Key> m_keys; 中。 当获得按键事件以后调用： status_t KeyLayoutMap::map(int32_t scancode, int32_t *keycode, uint32_t *flags) 由映射关系 KeyedVector<int32_t,Key> m_keys 把扫描码scancode转换成上层软件可以识别的按键keycode 。 扫描码首先在相应的kl文件里查找，没有则用缺省的qwerty.kl文件
+
+www.spreadtrum.com
+
+30
+
+驱动程序介绍 Key驱动
+
+Innovation changes the future
+
+frameworks\base\policy\src\com\android\internal\policy\impl\KeyguardViewMediator.java private boolean isWakeKeyWhenKeyguardShowing(int keyCode) { switch (keyCode) { case KeyEvent.KEYCODE_VOLUME_UP: case KeyEvent.KEYCODE_VOLUME_DOWN: case KeyEvent.KEYCODE_MUTE: case KeyEvent.KEYCODE_HEADSETHOOK: case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE: case KeyEvent.KEYCODE_MEDIA_STOP: case KeyEvent.KEYCODE_MEDIA_NEXT: case KeyEvent.KEYCODE_MEDIA_PREVIOUS: case KeyEvent.KEYCODE_MEDIA_REWIND: case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD: case KeyEvent.KEYCODE_CAMERA: return false; } return true; } 上述key在android中不可做唤醒使用。WindowMangerService得到键盘事件后判断是否为唤醒键来决定是否 可以亮屏等操作。
+
+www.spreadtrum.com
+
+31
+
+驱动程序介绍 Keypad char map：keycode ?app
+
+Innovation changes the future
+
+customize/customer_cfg/sp8810ga/res/sprd-keypad8810.kcm配置文件修改 [keypad character mapping] [type=QWERTY] # keycode display number base caps fn caps_fn A 'A' '2' 'a' 'A' 'a' 'A ' qwerty.kcm文件为了节省空间，在编译 过程中会用工具makekcharmap转化为 B 'B' '2' 'b' 'B' 'b' 'B ' 二进制文件qwerty.bin。 C 'C' '2' 'c' 'C' 'c' 0x00E7 D 'D' '3' 'd' 'D‘ ''' 0x00 /system/usr/keychars ? # ls qwerty2.kcm.bin frameworks/base/libs/ui/KeyCharacterMap.cpp qwerty.kcm.bin KeyCharacterMap*KeyCharacterMap::load(int id) snprintf(path, sizeof(path), "%s/usr/keychars/%s.kcm.bin", root, tmpfn); rv = try_file(path);
+
+使用： frameworks\base\core\java\android\view\KeyEvent.java public char getNumber() { return KeyCharacterMap.load(mDeviceId).getNumber(mKeyCode); } public boolean isPrintingKey() { return KeyCharacterMap.load(mDeviceId).isPrintingKey(mKeyCode);}
+
+www.spreadtrum.com
+
+32
+
+驱动程序介绍
+
+Key驱动
+
+Innovation changes the future
+
+测试系统输入设备 # cd /dev/input #ls event6 event5 event4 event3 event2 event1 event0 # cat event0 可以看出键盘输入有没有反应 其它的对应触摸屏，各种sensor等。
+
+www.spreadtrum.com
+
+33
+
+驱动程序介绍 V4L2驱动
+
+Innovation changes the future
+
+? V4L2驱动架构
+文件接口调用（ioctl） 用户空间
+
+/dev/video0
+
+具体V4L2驱动（dcam_v4l2.c） 实现struct_video_device
+
+内核空间
+
+调用
+
+注册video_register_device V4L2驱动核心（v4l2_dev.c）
+
+调用 字符设备驱动核心程序
+
+注册
+
+摄像头
+
+硬件层
+
+www.spreadtrum.com
+
+34
+
+驱动程序介绍 V4L2驱动
+kernel/drivers/media/video/sprd-dcam/sc8810/dcam_v4l2.c module_init(dcam_v4l2_init); platform_driver_register(&dcam_driver) kernel/drivers/media/video/sprd-dcam/ 代码路径 customize/customer_cfg/sp8810ga/kernel/camera/camera_cfg.c Linked to: kernel/arch/arm/mach-sc8810/board-sp8810/camera_cfg.c const SENSOR_INFO_T* main_sensor_infor_tab[]=//后置摄像头 { &g_ov5640_yuv_info, PNULL }; const SENSOR_INFO_T* sub_sensor_infor_tab []=//前置摄像头 { &g_GC0309_yuv_info, PNULL }; 3rdparty/camera/ov5640/kernel/sensor_ov5640.c 3rdparty/camera/gc0309/kernel/sensor_gc0309.c Linked to: kernel/drivers/media/video/sprd-dcam/ PUBLIC SENSOR_INFO_T g_GC0309_yuv_info = { GC0309_I2C_ADDR_W, GC0309_I2C_ADDR_R, 0, // bit0: 0: i2c register value is 8 bit, 1: i2c register value is 16 bit // bit2: 0: i2c register addr is 8 bit, 1: i2c register addr is 16 bit ?
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+35
+
+驱动程序介绍 Camera HAL
+
+Innovation changes the future
+
+Camera HAL是硬件和Framwork的桥梁。 接口在frameworks/base/include/ui/Camerahardwareinterface.h Camera HAL定义类Camerahardwareinterface作为接口，由不同系统去继承实现。 Spreadtrum实现代码路径hardware\sprd\hsdroid\libcamera 包括预览，视频记录，拍照等功能 HAL使用该设备 hardware\sprd\hsdroid\libcamera\sc8810\sprdOEMCamera.cpp open(“/dev/video0”,?) class SprdCameraHardware : public CameraHardwareInterface { public: virtual sp<IMemoryHeap> getPreviewHeap() const; virtual sp<IMemoryHeap> getRawHeap() const; virtual status_t dump(int fd, const Vector<String16>& args) const; //virtual status_t startPreview(preview_callback cb, void* user); virtual status_t startPreview(); virtual void stopPreview(); virtual bool previewEnabled(); //virtual status_t startRecording(recording_callback cb, void* user); virtual status_t startRecording(); }
+
+www.spreadtrum.com
+
+36
+
+驱动程序介绍 Camera之I2C驱动
+
+Innovation changes the future
+
+I2C配置 Camera driver描述(kernel\drivers\media\video\sprd_dcam\sc8810\sensor_drv.c) 通过函数i2c_add_driver(&sensor_i2c_driver)向I2C总线注册一个I2C设备的驱动 static struct i2c_driver sensor_i2c_driver = { .driver = { .owner = THIS_MODULE, }, .probe = sensor_probe, .remove = sensor_remove, .detect = sensor_detect, };
+
+www.spreadtrum.com
+
+37
+
+驱动程序介绍 I2C设备和驱动
+kernel\drivers\i2c\busses\i2c-sc8810.c module_init(i2c_adap_sc8810_init); platform_driver_register(&sc8810_i2c_driver); static int sc8810_i2c_probe(struct platform_device *pdev) static void sc8810_i2c_message_start(struct sc8800_i2c *i2c, struct i2c_msg *msg){ customize/customer_cfg/sp8810ga/kernel/i2c/i2c_cfg.c Linked to:kernel/arch/arm/mach-sc8810/board-sp8810/i2c_cfg.c static struct i2c_board_info __initdata i2c_boardinfo[] = { {I2C_BOARD_INFO("al3006_pls", 0x1c),}, }; static struct i2c_board_info __initdata i2c_boardinfo1[] = { {I2C_BOARD_INFO(SENSOR_MAIN_I2C_NAME,SENSOR_MAIN_I2C_ADDR),}, {I2C_BOARD_INFO(SENSOR_SUB_I2C_NAME,SENSOR_SUB_I2C_ADDR),}, }; static struct i2c_board_info __initdata i2c_boardinfo2[] = { {I2C_BOARD_INFO("pixcir_ts", 0x5C),}, }; int __init sprd_i2c_init(void) { sprd8810_i2c2pin_config(); //I2C2内部开关控制哪个pad输出 sprd_register_i2c_bus(0, i2c_boardinfo,ARRAY_SIZE(i2c_boardinfo)); sprd_register_i2c_bus(1, i2c_boardinfo1,ARRAY_SIZE(i2c_boardinfo1)); sprd_register_i2c_bus(2, i2c_boardinfo2,ARRAY_SIZE(i2c_boardinfo2)); sprd_register_i2c_bus(3, NULL, 0); return 0; } 3rdparty\msensor\akm8975\special\driver\akm8975.c static struct i2c_board_info akm8975_i2c_boardinfo = { I2C_BOARD_INFO(AKM8975_I2C_NAME, AKM8975_I2C_ADDR), static int __init akm8975_init(void) ret = i2c_static_add_device(&akm8975_i2c_boardinfo); 3rdparty\gsensor\lis3dh\special\driver\lis3dh_acc.c static struct i2c_board_info lis3dh_i2c_boardinfo = { I2C_BOARD_INFO(LIS3DH_ACC_I2C_NAME, LIS3DH_ACC_I2C_ADDR), static int __init lis3dh_acc_init(void) ret = i2c_static_add_device(&lis3dh_i2c_boardinfo);
+
+Innovation changes the future
+
+3rdparty\fm\kt0812G\special\driver\kt0812g_fm_ctrl.c static struct i2c_board_info kt0812g_i2c_boardinfo = { I2C_BOARD_INFO(KT0812G_I2C_NAME, KT0812G_I2C_ADDR), static int __init kt0812g_driver_init(void){ ret = i2c_static_add_device(&kt0812g_i2c_boardinfo);
+
+www.spreadtrum.com
+
+38
+
+驱动程序介绍 acc sensor驱动
+代码：3rdparty\gsensor\lis3dh\special\driver\lis3dh_acc.c 首先通过i2c_static_add_device(&lis3dh_i2c_boardinfo); 注册I2C设备 和通过i2c_add_driver(&lis3dh_acc_driver);添加驱动。 static struct i2c_driver lis3dh_acc_driver = { .driver = { .name = LIS3DH_ACC_I2C_NAME, }, .probe = lis3dh_acc_probe, .remove = __devexit_p(lis3dh_acc_remove), .resume = lis3dh_acc_resume, .suspend = lis3dh_acc_suspend, .id_table = lis3dh_acc_id, }; 再通过input_register_device(acc->input_dev);注册成输入设备。其中： acc->input_dev->name = "accelerometer"; acc->input_dev->open = lis3dh_acc_input_open; acc->input_dev->close = lis3dh_acc_input_close; ? 上报数据： static void lis3dh_acc_report_values(struct lis3dh_acc_data *acc, int *xyz) { input_report_abs(acc->input_dev, ABS_X, xyz[0]); input_report_abs(acc->input_dev, ABS_Y, xyz[1]); input_report_abs(acc->input_dev, ABS_Z, xyz[2]); input_sync(acc->input_dev); www.spreadtrum.com }
+
+Innovation changes the future
+
+39
+
+驱动程序介绍 Msensor驱动
+代码： 3rdparty\msensor\akm8975\special\driver\akm8975.c 首先通过i2c_static_add_device(&akm8975_i2c_boardinfo); 注册I2C设备 和通过i2c_add_driver(&akm8975_driver);添加驱动。 static struct i2c_driver akm8975_driver = { .probe = akm8975_probe, .remove = akm8975_remove, #ifdef CONFIG_PM .suspend = akm8975_suspend, .resume = akm8975_resume, #endif .id_table = akm8975_id, .driver = { .name = AKM8975_I2C_NAME, }, }; 再通过input_register_device(*input);注册成input设备。其中： (*input)->name = "compass"; set_bit(EV_ABS, (*input)->evbit);
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+40
+
+驱动程序介绍 光sensor/接近sensor驱动
+代码路径 3rdparty\lsensor\AL3006\special\driver\al3006_pls.c 首先通过cfg里面的sprd_register_i2c_bus(0, i2c_boardinfo,ARRAY_SIZE(i2c_boardinfo));注册成I2C设备 和通过i2c_add_driver(&al3006_pls_driver);添加驱动 static struct i2c_driver al3006_pls_driver = { .driver = { .owner = THIS_MODULE, .name = AL3006_PLS_DEVICE, }, .probe = al3006_pls_probe, .remove = al3006_pls_remove, .id_table = al3006_pls_id, }; 再通过err = misc_register(&al3006_pls_device);注册成简单字符设备 static struct miscdevice al3006_pls_device = { .minor = MISC_DYNAMIC_MINOR, .name = AL3006_PLS_DEVICE, .fops = &al3006_pls_fops,}; 再通过input_register_device(input_dev);注册为输入设备。 input_dev->name = AL3006_PLS_INPUT_DEV; input_dev->phys = AL3006_PLS_INPUT_DEV; input_dev->id.bustype = BUS_I2C; input_dev->dev.parent = &client->dev; 数据上报 case AL3006_PLS_DPS_INT: al3006_pls_report_dps(data, pls->input); case AL3006_PLS_DLS_INT: al3006_pls_report_dls(data, pls->input);
+
+Innovation changes the future
+
+break; break;
+
+www.spreadtrum.com
+
+41
+
+驱动程序介绍 sensor HAL
+sensor HAL层代码: 3rdparty/app/app8810/special/android/hardware/sprd/hsdroid/libsensors/ Sensors.cpp给出传感器支持列表 ,以及主要HAL处理
+static const struct sensor_t sSensorList[] = { { "AK8975 3-axis Magnetic field sensor", "Asahi Kasei Microdevices", 1, SENSORS_MAGNETIC_FIELD_HANDLE, SENSOR_TYPE_MAGNETIC_FIELD, 1228.8f, CONVERT_M, 0.35f, 10000, { } }, { "ST LIS3DH 3-axis Accelerometer", "ST", 1, SENSORS_ACCELERATION_HANDLE, SENSOR_TYPE_ACCELEROMETER, (GRAVITY_EARTH * 2.0f), (GRAVITY_EARTH)/ 1024.0f, 0.145f, 10000, { } }, { "AK8975 Orientation sensor", "Asahi Kasei Microdevices", 1, SENSORS_ORIENTATION_HANDLE, SENSOR_TYPE_ORIENTATION, 360.0f, CONVERT_O, 0.495f, 10000, { } }, { "AL3006 Light sensor", "LITEON", 1, SENSORS_LIGHT_HANDLE, SENSOR_TYPE_LIGHT, 1.0f, 100000.0f, 0.005f, 0, { } }, { "AL3006 Proximity sensor", "LITEON", 1, SENSORS_PROXIMITY_HANDLE, SENSOR_TYPE_PROXIMITY, 1.0f, 1.0f, 0.005f, 0, { } },
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+42
+
+驱动程序介绍 TP
+代码路径 3rdparty\tp\PIXCIR\special\driver\pixcir_i2c_ts.c module_init(pixcir_i2c_ts_init); ret = register_chrdev(I2C_MAJOR,"pixcir_i2c_ts",&pixcir_i2c_ts_fops); i2c_add_driver(&pixcir_i2c_ts_driver); static const struct file_operations pixcir_i2c_ts_fops = { .owner = THIS_MODULE, .read = pixcir_read, .write = pixcir_write, .open = pixcir_open, .unlocked_ioctl = pixcir_ioctl, .release = pixcir_release, }; static struct i2c_driver pixcir_i2c_ts_driver = { .driver = { .owner = THIS_MODULE, .name = "pixcir_i2c_ts_v3.2.0A", }, .probe = pixcir_i2c_ts_probe, .remove = __devexit_p(pixcir_i2c_ts_remove), .id_table = pixcir_i2c_ts_id, }; error = input_register_device(input); //输入设备 input->name = client->name; input->id.bustype = BUS_I2C; input->dev.parent = &client->dev; 需要注意的地方:凡是按键设备，都需要配置kl和kcm文件， 否则都按缺省的kl,kcm文件来处理（包括耳机按键处理） 电容屏中断处理， error = request_threaded_irq(client->irq, NULL, pixcir_ts_isr, IRQF_TRIGGER_FALLING, client->name, tsdata);
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+43
+
+驱动程序介绍 ALSA驱动
+
+Innovation changes the future
+
+ALSA音频驱动 ALSA音频驱动在Android系统的位置 Mediaplayer ?new StagefrightPlayer ? AudioSystem::get_audio_flinger 创建audio的HAL代表 mAudioHardware = AudioHardwareInterface::create();//AudioFlinger.cpp Creating Vendor Specific AudioHardware ? new AudioHardwareALSA(); 实现在 AudioHardwareInterface *AudioHardwareALSA::create() { In external/sprd/alsa/alsa_sound/AudioHardwareALSA.cpp ? 使用snd_open_device()打开音频设备 /dev/snd/* in external/sprd/alsa/alsa_lib/*.c ? audio的HAL最终操作音频设备（vb-codec) vb-codec驱动代码位于kernel\sound\soc\sc88xx\*.c platform_device_add(sprdphone_snd_device);
+www.spreadtrum.com 44
+
+驱动程序介绍 ALSA驱动
+
+Innovation changes the future
+
+? ALSA驱动架构
+文件接口调用（ioctl）
+
+ALSA工具(new AudioHardwareALSA();) ALSA用户空间
+
+ALSA库 (external\sprd\alsa\alsa*) 用户空间
+
+/dev/snd/controlxx /dev/snd/pcmxx
+
+内核空间 具体驱动（ kernel\sound\soc\sc88xx\*.c ）
+
+调用
+
+注册device
+ALSA驱动核心（core/sound.c） 控制设备control.c, 数据设备pcm.c 注册
+
+调用 字符设备驱动核心程序
+
+音频设备
+
+硬件层
+
+www.spreadtrum.com
+
+45
+
+驱动程序介绍
+
+FLASH驱动
+
+Innovation changes the future
+
+在linux中提供了MTD（Memory Technology Device，内存技术设备）系统来建立Flash针对linux的统一、抽 象的接口。引入MTD后，linux系统中的Flash设备驱动及接口可分为4层: 1 硬件驱动层： Flash硬件驱动层负责底层硬件设备实际的读、写、擦除，驱动位于driver/mtd/nand子目录 下 2 MTD原始设备层： MTD原始设备层由两部分构成，一部分是MTD原始设备的通用代码，另一部分是各个 特定Flash的数据，比如分区。支持mtd字符设备，和mtd块设备。 3 MTD设备层：基于MTD原始设备，Linux系统可以定义出MTD块设备 和字符设备。作为具体的硬件设备驱 动和上层文件系统的桥梁。 4 设备节点：在/dev子目录下建立MTD字符设备节点（主设备号为90）和MTD块设备节点（主设备号为 31），通过访问此设备节点即可访问。
+根文件系统：ramdisk，kernel启动时将该分区作为根文件系统挂载。 其它文件系统：内核启动后，通过mount 命令可以将flash中的其余分区作为文件系统挂载到各自挂载点上。
+
+www.spreadtrum.com
+
+46
+
+驱动程序介绍
+
+FLASH驱动
+
+Innovation changes the future
+
+? FLASH驱动架构
+文件接口调用（ioctl ） 文件接口调用（ioctl） 用户空间 内核空间 具体驱动（ kernel\drivers\mtd\nand\sprd*.c ） （实现struct mtd_info） MTD字符设备（mtdchar.c） MTD块设备（mtdblock.c） 注册device add_mtd_device add_mtd_partitions
+
+文件系统 /dev/mtdxx
+/dev/block/mtdblockxx
+
+调用
+
+MTD原始设备（mtdcore.c）
+
+NAND FLASH设备 硬件层
+
+www.spreadtrum.com
+
+47
+
+驱动程序介绍
+
+BT驱动
+
+Innovation changes the future
+
+Android蓝牙协议栈使用的是BlueZ。
+
+实线框的是Android模块，红色虚线部分为芯片商提供。
+
+www.spreadtrum.com
+
+48
+
+驱动程序介绍
+
+BT驱动
+
+Innovation changes the future
+
+蓝牙接口包括串口配置，PCM接口以及睡眠唤醒控制。
+BlueZ核心子系统使用hciattach守护进程指定硬件串口驱动。 init.rc里hciattach设定串口ttyS0： service hciattach /system/bin/hciattach.csr.sh 其中脚本里含： hciattach -n /dev/ttyS0 bcsp 3000000 noflow 2>&1 电源开关方法：Android框架使用linux rfkill API: Kernel/arch/arm/mach-sc8810/rfkill_dummy.c late_initcall(rfkill_init); static int __init rfkill_init(void) ret = platform_device_add(rfkill_pdev); rfkill = rfkill_alloc(rfkill_pdev->name, &rfkill_pdev->dev, RFKILL_TYPE_BLUETOOTH, &rfkill_ops, NULL); cat /sys/class/rfkill/rfkill0/type 返回bluetooth cat /sys/class/rfkill/rfkill0/state 返回1 system\bluetooth\bluedroid\bluetooth.c static int set_bluetooth_power(int on) {fd = open(rfkill_state_path, O_WRONLY); write(fd, &buffer, 1);
+
+www.spreadtrum.com
+
+49
+
+驱动程序介绍
+
+serial驱动
+
+Innovation changes the future
+
+Kernel/drivers/serial/serial_sc8810.c module_init(serialsc8800_init); static int __init serialsc8800_init(void){ wake_lock_init(&uart_rx_lock, WAKE_LOCK_SUSPEND, "uart_rx_lock"); return platform_driver_register(&serialsc8800_driver);} static struct platform_driver serialsc8800_driver = { static struct uart_ops serialsc8800_ops = { .probe = serialsc8800_probe, .tx_empty =serialsc8800_tx_empty, .remove = serialsc8800_remove, .get_mctrl =serialsc8800_get_mctrl, .suspend = serialsc8800_suspend, .set_mctrl =serialsc8800_set_mctrl, .resume = serialsc8800_resume, .stop_tx =serialsc8800_stop_tx, .driver = { .start_tx =serialsc8800_start_tx, .name = "serial_sp", .stop_rx =serialsc8800_stop_rx, .owner = THIS_MODULE, .enable_ms =serialsc8800_enable_ms, }, .break_ctl =serialsc8800_break_ctl, }; .startup =serialsc8800_startup, static int serialsc8800_probe(struct platform_device *dev) .shutdown =serialsc8800_shutdown, serialsc8800_setup_ports(); .set_termios =serialsc8800_set_termios, ret = uart_register_driver(&serialsc8800_reg); .type =serialsc8800_type, static void serialsc8800_setup_ports(void){ .release_port =serialsc8800_release_port, unsigned int i; .request_port =serialsc8800_request_port, .config_port=serialsc8800_config_port, for(i=0;i<UART_NR;i++) .verify_port =serialsc8800_verify_port, serialsc8800_ports[i].uartclk=UART_CLK; }; } static void serialsc8800_set_termios(struct uart_port *port,struct ktermios *termios,struct ktermios *old) static struct uart_port serialsc8800_ports[] = { … [0]={ /* .iotype =SERIAL_IO_PORT, *flow control .membase =(void *)SPRD_SERIAL0_BASE, */ .mapbase = SPRD_SERIAL0_BASE, fc=serial_in(port,ARM_UART_CTL1); .uartclk =UART_CLK, fc &=~(RX_HW_FLOW_CTL_THRESHOLD|RX_HW_FLOW_CTL_EN|TX_HW_FLOW_CTL_EN); .irq =IRQ_UART0, if(termios->c_cflag & CRTSCTS){ .fifosize =128, fc |= RX_HW_FLOW_CTL_THRESHOLD; .ops =&serialsc8800_ops, fc |= RX_HW_FLOW_CTL_EN; .flags =ASYNC_BOOT_AUTOCONF, fc |= TX_HW_FLOW_CTL_EN; .line =0, } }, …
+
+www.spreadtrum.com
+
+50
+
+驱动程序介绍
+
+GPS驱动
+
+Innovation changes the future
+
+底层设定串口ttyS2： 3rdparty\gps\gsd4t\special\apps\gsd4t\include\gps_sirf.h #define CSR_GPS_TRACKER_DEVICE_ID_DEFAULT
+
+"/dev/ttyS2“
+
+3rdparty\gps\gsd4t\special\apps\gsd4t\source\gps_sirf.c CsrStrNCpyZero(mCsrGpsConfig.trackerPort, CSR_GPS_TRACKER_DEVICE_ID_DEFAULT, SLL_MAX_PORT_NUM_STRING_LENGTH); 电源控制 上层适配： 向JNI【 frameworks/base/core/jni/android_location_GpsLocationProvider.cpp 】提供接口： 需要实现 1，GpsInterface接口是gps模块中最重要的数据结构，它是底层驱动实现的接口， 2， GpsCallbacks回调函数 3， GpsLocation，底层驱动获得Location的raw信息，通常是nmea码，通过解析得到location信息。 AGPS 虽然给了辅助信息，但是如果天线不好搜星一样也慢。
+
+www.spreadtrum.com
+
+51
+
+驱动程序介绍 sprd SPI
+kernel\drivers\spi\spi_sc8810.c module_init(sprd_spi_init); static int __init sprd_spi_init(void) { return platform_driver_probe(&sprd_spi_driver, sprd_spi_probe); } static struct platform_driver sprd_spi_driver = { .driver = { .name = "sprd_spi", .owner = THIS_MODULE, }, .suspend = sprd_spi_suspend, .resume = sprd_spi_resume, .remove = __exit_p(sprd_spi_remove), }; kernel\arch\arm\mach-sc8810\board-sp8810\board_cfg.c static struct spi_board_info openhone_spi_devices4wifi[] = { { .modalias = "spi_slot0", // "spidev" --> spidev_spi static struct spi_board_info openhone_spi_devices4cmmb[] = { { .modalias = "cmmb-dev", // "spidev" --> spidev_spi
+
+Innovation changes the future
+
+static struct spi_device *sprd_spi_device_register(int master_bus_num, struct spi_board_info *chip, int type) switch (type) { case SPRD_3RDPARTY_SPI_WIFI_CS: chip = openhone_spi_devices4wifi; break; case SPRD_3RDPARTY_SPI_CMMB_CS: chip = openhone_spi_devices4cmmb; break; return spi_new_device(spi_busnum_to_master(master_bus_num), chip); //添加SPI设备
+
+www.spreadtrum.com
+
+52
+
+驱动程序介绍 INNO CMMB
+3rdparty\cmmb\IF238\special\driver\plat\inno_plat_8810g.c module_init(inno_plat_init); static int __init inno_plat_init(void){ g_spi = sprd_spi_cmmb_device_register(-1, NULL); sprd_spi_tmod(g_spi, SPI_TMOD_DEMOD); spi_register_driver(&spi_driver); static struct spi_driver spi_driver = { .probe = spi_probe, .remove = __devexit_p(spi_remove), .driver = { .name = "cmmb-dev", }, };
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+53
+
+驱动程序介绍
+
+WIFI驱动
+
+Innovation changes the future
+
+Wifi下层模块 1, Wifi,相当于HAL，[3rdparty\wifi\UNIFI6030\special\android\hardware\libhardware_legacy\wifi\wifi.c] 封装Wpa_supplicant 2, Wpa_supplicant [Wifi Protected Access] [external/wpa_supplicant/] 读取配置文件；初始化配置参数，驱动函数；让驱动scan当前所有的bssid； 检查扫描的参数是否和用户设置的相符；如果相符，通知驱动进行权限 认证操作；连上AP。 3, Wifi驱动模块 厂商提供的source,主要进行load firware和kernel的wireless进行通信。 4, Wifi电源管理模块 主要控制硬件的GPIO和上下电，让CPU和Wifi模组之间通过sdio接口通信。 5，协议 kernel/net/wireless 6 ，驱动 kernel/drivers/? Wifi工作步骤: Wifi启动;开始扫描;显示扫描的AP;配置AP;连接AP;获取IP地址;上网。
+
+WIFI支持SPI和SDIO两种接口，现默认为SPI，而SDIO为备份。 由于和CMMB共用SPI，使用开关来控制。另外WIFI还有LDO使能开关和RST/关断控制。
+www.spreadtrum.com 54
+
+Android Gpio 配置
+Pinmap配置 customize/customer_cfg/sp8810ga/kernel/pinmap/pinmap.c Linked to: kernel/arch/arm/mach-sc8810/board-sp8810/ GPIO配置 customize/customer_cfg/sp8810ga/kernel/gpio/gpio_cfg.c Linked to: kernel/arch/arm/mach-sc8810/board-sp8810/
+
+Innovation changes the future
+
+/* Pinmap ctrl register Bit field value --------------------------------------------------------------------------------------------------| | | | | | | | | | DS[9:8]| func PU[7] | func PD[6] | func sel[5:4]| Slp PU[3] | slp PD[2] | input[1] | output[0] | | | | | | | | | | --------------------------------------------------------------------------------------------------*/ const PM_PINFUNC_T pm_func[]= { // | Pin Register | DS | Func PU/PD | Func Select | Slp PU/PD | Sleep OE/IE | {PIN_CTL_REG, ( 0x1fff00) }, {PIN_SIMCLK0_REG, ( PIN_DS_1 | PIN_FPX_EN | PIN_FUNC_DEF | PIN_SPX_EN | PIN_O_EN ) }, // 0x101 SIM0 {PIN_SIMDA0_REG, ( PIN_DS_1 | PIN_FPU_EN | PIN_FUNC_DEF | PIN_SPU_EN | PIN_I_EN ) }, // 0x18A SIM0 … {PIN_GPIO142_REG, ( PIN_DS_1 | PIN_FPX_EN | PIN_FUNC_DEF | PIN_SPX_EN | PIN_Z_EN ) }, // 0x100 WIFI_WAKEUP(NU) {PIN_GPIO143_REG, ( PIN_DS_3 | PIN_FPX_EN | PIN_FUNC_1 | PIN_SPX_EN | PIN_Z_EN ) }, // 0x310 SCL {PIN_GPIO144_REG, ( PIN_DS_3 | PIN_FPX_EN | PIN_FUNC_1 | PIN_SPX_EN | PIN_Z_EN ) }, // 0x310 SDA
+
+这个表给出了各个引脚的初始配置。
+
+www.spreadtrum.com
+
+55
+
+Android Pinmap 配置
+Pinmap配置 customize/customer_cfg/sp8810ga/kernel/pinmap/pinmap_cfg.c Linked to: kernel/arch/arm/mach-sc8810/board-sp8810/
+
+Innovation changes the future
+
+/* Pinmap ctrl register Bit field value --------------------------------------------------------------------------------------------------| | | | | | | | | | DS[9:8]| func PU[7] | func PD[6] | func sel[5:4]| Slp PU[3] | slp PD[2] | input[1] | output[0] | | | | | | | | | | --------------------------------------------------------------------------------------------------*/ const PM_PINFUNC_T pm_func[]= { // | Pin Register | DS | Func PU/PD | Func Select | Slp PU/PD | Sleep OE/IE | {PIN_CTL_REG, ( 0x1fff00) }, {PIN_SIMCLK0_REG, ( PIN_DS_1 | PIN_FPX_EN | PIN_FUNC_DEF | PIN_SPX_EN | PIN_O_EN ) }, // 0x101 SIM0 {PIN_SIMDA0_REG, ( PIN_DS_1 | PIN_FPU_EN | PIN_FUNC_DEF | PIN_SPU_EN | PIN_I_EN ) }, // 0x18A SIM0 … {PIN_GPIO142_REG, ( PIN_DS_1 | PIN_FPX_EN | PIN_FUNC_DEF | PIN_SPX_EN | PIN_Z_EN ) }, // 0x100 WIFI_WAKEUP(NU) {PIN_GPIO143_REG, ( PIN_DS_3 | PIN_FPX_EN | PIN_FUNC_1 | PIN_SPX_EN | PIN_Z_EN ) }, // 0x310 SCL {PIN_GPIO144_REG, ( PIN_DS_3 | PIN_FPX_EN | PIN_FUNC_1 | PIN_SPX_EN | PIN_Z_EN ) }, // 0x310 SDA
+
+这个表给出了各个引脚的初始配置。
+
+www.spreadtrum.com
+
+56
+
+Android Gpio 配置
+GPIO配置 customize/customer_cfg/sp8810ga/kernel/gpio/gpio_cfg.c Linked to: kernel/arch/arm/mach-sc8810/board-sp8810/
+
+Innovation changes the future
+
+static struct gpio_initdata __initdata gpio_func_cfg[] = { {&sprd_3rdparty_gpio_wifi_power, -1 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_wifi_reset, 140 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_wifi_pwd, 137 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_wifi_irq, -1 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_bt_power, -1 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_bt_reset, 90 |GPIO_DEFAUT_HIGH {&sprd_3rdparty_gpio_bt_rts, 42 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_cmmb_power, -1 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_cmmb_reset, 138 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_cmmb_irq, 139 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_tp_rst, 59 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_tp_irq, 60 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_pls_irq, 28 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_mint_irq, 97 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_gps_pwr, -1 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_gps_rst, 26 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_gps_onoff, 27 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_main_camera_pwd, 73 |GPIO_DEFAUT_LOW {&sprd_3rdparty_gpio_sub_camera_pwd, 74 |GPIO_DEFAUT_LOW
+};
+
+|GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_INPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_INPUT |GPIO_DIRECTION_INPUT |GPIO_DIRECTION_INPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT |GPIO_DIRECTION_OUTPUT
+
+|GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE}, |GPIO_LOGIC_TRUE},
+
+www.spreadtrum.com
+
+57
+
+驱动代码介绍
+Gpio调试工具 方法1. #lookat 查看寄存器值 #lookat –s 设置寄存器的值
+
+gpio 调试工具
+
+Innovation changes the future
+
+方法2.debugfs ? mount –t debugfs /d , .config CONFIG_DEBUG_FS=y #cat /d/gpio GPIOs 0-220, sc8810-gpio: gpio-28 ([auto] ) in hi irq-41 level-low gpio-32 (spi0.1 ) out hi gpio-33 (spi0.0 ) out hi gpio-59 ([auto] ) out lo gpio-60 ([auto] ) in hi irq-42 edge-falling gpio-90 (槂0蝋涮瑒0螤?? ) out hi gpio-101 (sdcard detect ) in hi gpio-145 (charger detect ) in lo gpio-146 (charger detect ) in lo #echo -o 103 1 >/d/gpio [set to output，value=1] #echo -i 103 > /d/gpio [set to input] #echo 103 1 1000 1 > /dev/gpio [gpio_number pre_level time_ms stable_level] 时间内有效 方法3. sysfs ? Kernel .config .config CONFIG_GPIO_SYSFS=y echo 103 > /sys/class/gpio/export //如果没有出现相应的目录，说明此引脚不可导出 cd /sys/class/gpio/gpio103 cat direction Cat value echo out > direction echo 0 >value
+
+www.spreadtrum.com
+
+58
+
+客户调试过程
+1,硬件出具硬件规格表，以及与参考机的差分表。 当然为减少软件调试时间，应沟通要求尽量选用我们的参考器件。 GPIO，KeyPad,LCD,TP,FrontCameraSensor,BackCamaraSensor, AccSensor,MagSensor,L/ProSensor, FLASH+SDRAM,WIFI,BT,GPS,CMMB等。 以及有无新加器件。对于新器件要从厂家获得相应的资料，资源。 2，验证下载和开机。驱动人员FLASH+SDRAM适配。 3，驱动人员首先配置GPIO，在pinmap_cfg.c，gpio_cfg.c。 4，驱动人员调试LCD，TP，Keypad,注意uboot里也要修改LCD等。 5，驱动人员调试FrontCameraSensor,BackCamaraSensor。 6，驱动人员调试AccSensor,MagSensor,L/ProSensor。 7，驱动人员调试WIFI,BT,GPS,CMMB。 8，驱动人员调试其它驱动。 9，调试其它功能。 10，整机测试。
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+59
+
+修改记录
+版本 V0.1 V0.2 V0.3 V0.31 V1.0.0 日期 2011.08.22 2011.10.18 2011.10.29 2011.11.12 2012.03.16 作者 Jianbiao zhou XQ XQ XQ XQ 说明 初稿 修改添加部分内容 修改添加部分内容 增加客户调试过程等内容 针对8810作部分修改
+
+Innovation changes the future
+
+www.spreadtrum.com
+
+60
+
+www.spreadtrum.com
+Innovation changes the future
+
+谢谢
+
+上海· 北京· 深圳· 圣迭戈· 韩国·印度
+
+www.spreadtrum.com
+
+61
